@@ -42,8 +42,9 @@ canvas#roll { display:block; }
 <body>
 <div id="app"></div>
 <script type="module">
-/** @jsx h */
 import { h, applyDiff } from 'https://esm.sh/webjsx@latest';
+import htm from 'https://esm.sh/htm@3';
+const html = htm.bind(h);
 
 // 1. STATE
 const S = {
@@ -528,200 +529,181 @@ const sv = (nrpn, val) => { S.patch[nrpn] = val; sendNRPN(nrpn, val + 64); };
 // 8. RENDER FUNCTIONS
 function renderSysex() {
   const sx = S.sysex;
-  return (
-    <div>
-      <div class="param-row" style="flex-wrap:wrap;gap:6px">
-        <button class="btn btn-sm btn-primary" onclick={() => requestPatch(sx.presetNum)}>Request Patch</button>
-        <button class="btn btn-sm btn-primary" onclick={() => sendPatchDump()}>Send Patch</button>
-        <button class="btn btn-sm" onclick={() => saveSyx()}>Save .syx</button>
-        <label class="btn btn-sm" style="cursor:pointer">Load .syx
-          <input type="file" accept=".syx,.mid" style="display:none"
-            onchange={e => e.target.files[0] && loadSyx(e.target.files[0])} />
-        </label>
-        <button class="btn btn-sm" onclick={() => requestBankDump()}>Dump All 128</button>
-      </div>
-      <div class="param-row" style="margin-top:8px">
-        <label>Preset #</label>
-        <input type="number" style="width:60px" value={sx.presetNum} min={0} max={127}
-          oninput={e => { sx.presetNum = parseInt(e.target.value)||0; }} />
-        <span style="color:#666;font-size:11px">(0–127)</span>
-      </div>
-      <div style="margin-top:10px">
-        <b style="font-size:12px">Patch Bank</b>
-        <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;max-height:160px;overflow-y:auto">
-          {Array.from({length:128},(_,i) => {
-            const p = sx.bank[i];
-            return <div
-              style={`width:72px;height:28px;border:1px solid ${i===sx.presetNum?'#4a9eff':'#333'};border-radius:3px;background:${p?'#1e3a5f':'#1a1d26'};display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer;overflow:hidden;padding:0 2px`}
-              onclick={() => { sx.presetNum=i; requestPatch(i); render(); }}>
-              {p ? p.name : i}
-            </div>;
-          })}
-        </div>
-      </div>
-      <div style="margin-top:10px">
-        <b style="font-size:12px">RX Log</b>
-        <pre style="background:#111;padding:6px;border-radius:4px;font-size:10px;max-height:100px;overflow:auto;color:#4a9eff;margin:4px 0 0">{sx.rxLog || '(none)'}</pre>
+  return html`<div>
+    <div class="param-row" style="flex-wrap:wrap;gap:6px">
+      <button class="btn btn-sm btn-primary" onclick=${() => requestPatch(sx.presetNum)}>Request Patch</button>
+      <button class="btn btn-sm btn-primary" onclick=${() => sendPatchDump()}>Send Patch</button>
+      <button class="btn btn-sm" onclick=${() => saveSyx()}>Save .syx</button>
+      <label class="btn btn-sm" style="cursor:pointer">Load .syx
+        <input type="file" accept=".syx,.mid" style="display:none"
+          onchange=${e => e.target.files[0] && loadSyx(e.target.files[0])} />
+      </label>
+      <button class="btn btn-sm" onclick=${() => requestBankDump()}>Dump All 128</button>
+    </div>
+    <div class="param-row" style="margin-top:8px">
+      <label>Preset #</label>
+      <input type="number" style="width:60px" value=${sx.presetNum} min="0" max="127"
+        oninput=${e => { sx.presetNum = parseInt(e.target.value)||0; }} />
+      <span style="color:#666;font-size:11px">(0–127)</span>
+    </div>
+    <div style="margin-top:10px">
+      <b style="font-size:12px">Patch Bank</b>
+      <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;max-height:160px;overflow-y:auto">
+        ${Array.from({length:128},(_,i) => {
+          const p = sx.bank[i];
+          return html`<div
+            style=${'width:72px;height:28px;border:1px solid '+(i===sx.presetNum?'#4a9eff':'#333')+';border-radius:3px;background:'+(p?'#1e3a5f':'#1a1d26')+';display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer;overflow:hidden;padding:0 2px'}
+            onclick=${() => { sx.presetNum=i; requestPatch(i); render(); }}>
+            ${p ? p.name : i}
+          </div>`;
+        })}
       </div>
     </div>
-  );
+    <div style="margin-top:10px">
+      <b style="font-size:12px">RX Log</b>
+      <pre style="background:#111;padding:6px;border-radius:4px;font-size:10px;max-height:100px;overflow:auto;color:#4a9eff;margin:4px 0 0">${sx.rxLog || '(none)'}</pre>
+    </div>
+  </div>`;
 }
-
 
 function renderMidi() {
   const ok = !!S.midi.output;
-  return (
-    <div>
-      <div class="param-row">
-        <label>Output</label>
-        <select onchange={e => { S.midi.output = S.midi.outputs.find(o=>o.id===e.target.value)||null; render(); }}>
-          {S.midi.outputs.length===0 && <option>No MIDI outputs</option>}
-          {S.midi.outputs.map(o => <option value={o.id} selected={!!(S.midi.output&&S.midi.output.id===o.id)}>{o.name}</option>)}
-        </select>
-        <span class={`midi-dot ${ok?'ok':''}`}></span>
-        <button class="btn btn-sm" onclick={() => initMIDI()}>Refresh</button>
-      </div>
-      <div class="param-row">
-        <label>Channel</label>
-        <select onchange={e => { S.midi.channel=parseInt(e.target.value); render(); }}>
-          {Array.from({length:16},(_,i) => <option value={i+1} selected={S.midi.channel===i+1}>{i+1}</option>)}
-        </select>
-      </div>
-      <div class="param-row" style="margin-top:14px">
-        <label>NRPN #</label>
-        <input type="number" style="width:70px" value={S.nrpnNum}
-          oninput={e => { S.nrpnNum=parseInt(e.target.value)||0; }} />
-        <label>Val</label>
-        <input type="number" style="width:70px" value={S.nrpnVal}
-          oninput={e => { S.nrpnVal=parseInt(e.target.value)||0; }} />
-        <button class="btn btn-sm btn-primary" onclick={() => sendNRPN(S.nrpnNum, S.nrpnVal)}>Send</button>
-      </div>
+  return html`<div>
+    <div class="param-row">
+      <label>Output</label>
+      <select onchange=${e => { S.midi.output = S.midi.outputs.find(o=>o.id===e.target.value)||null; render(); }}>
+        ${S.midi.outputs.length===0 ? html`<option>No MIDI outputs</option>` : null}
+        ${S.midi.outputs.map(o => html`<option value=${o.id} selected=${!!(S.midi.output&&S.midi.output.id===o.id)}>${o.name}</option>`)}
+      </select>
+      <span class=${'midi-dot'+(ok?' ok':'')}></span>
+      <button class="btn btn-sm" onclick=${() => initMIDI()}>Refresh</button>
     </div>
-  );
+    <div class="param-row">
+      <label>Channel</label>
+      <select onchange=${e => { S.midi.channel=parseInt(e.target.value); render(); }}>
+        ${Array.from({length:16},(_,i) => html`<option value=${i+1} selected=${S.midi.channel===i+1}>${i+1}</option>`)}
+      </select>
+    </div>
+    <div class="param-row" style="margin-top:14px">
+      <label>NRPN #</label>
+      <input type="number" style="width:70px" value=${S.nrpnNum}
+        oninput=${e => { S.nrpnNum=parseInt(e.target.value)||0; }} />
+      <label>Val</label>
+      <input type="number" style="width:70px" value=${S.nrpnVal}
+        oninput=${e => { S.nrpnVal=parseInt(e.target.value)||0; }} />
+      <button class="btn btn-sm btn-primary" onclick=${() => sendNRPN(S.nrpnNum, S.nrpnVal)}>Send</button>
+    </div>
+  </div>`;
 }
 
 function renderModMatrix() {
-  return (
-    <div>
-      {Array.from({length:12},(_,i) => {
-        const base=150+i*4, src=gv(base,0), dst=gv(base+1,0), lvl=gv(base+2,64);
-        return (
-          <div class="param-row">
-            <label>Mod {i+1}</label>
-            <select onchange={e => { sv(base,parseInt(e.target.value)); render(); }}>
-              {MOD_SRC.map((s,si) => <option value={si} selected={src===si}>{s}</option>)}
-            </select>
-            <span>&#8594;</span>
-            <select onchange={e => { sv(base+1,parseInt(e.target.value)); render(); }}>
-              {MOD_DST.map((d,di) => <option value={di} selected={dst===di}>{d}</option>)}
-            </select>
-            <input type="range" min={0} max={127} value={lvl} style="width:80px"
-              oninput={e => { sv(base+2,parseInt(e.target.value)); render(); }} />
-            <span class="val">{lvl}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
+  return html`<div>
+    ${Array.from({length:12},(_,i) => {
+      const base=150+i*4, src=gv(base,0), dst=gv(base+1,0), lvl=gv(base+2,64);
+      return html`<div class="param-row">
+        <label>Mod ${i+1}</label>
+        <select onchange=${e => { sv(base,parseInt(e.target.value)); render(); }}>
+          ${MOD_SRC.map((s,si) => html`<option value=${si} selected=${src===si}>${s}</option>`)}
+        </select>
+        <span>→</span>
+        <select onchange=${e => { sv(base+1,parseInt(e.target.value)); render(); }}>
+          ${MOD_DST.map((d,di) => html`<option value=${di} selected=${dst===di}>${d}</option>`)}
+        </select>
+        <input type="range" min="0" max="127" value=${lvl} style="width:80px"
+          oninput=${e => { sv(base+2,parseInt(e.target.value)); render(); }} />
+        <span class="val">${lvl}</span>
+      </div>`;
+    })}
+  </div>`;
 }
 
 function renderPatch() {
   const params = PATCH_DEFS[S.patchTab] || [];
-  return (
-    <div>
-      <div class="ptabs">
-        {[...Object.keys(PATCH_DEFS),'Mod'].map(t =>
-          <button class={`btn btn-sm ${S.patchTab===t?'btn-primary':''}`}
-            onclick={() => { S.patchTab=t; render(); }}>{t}</button>
-        )}
-      </div>
-      {S.patchTab==='Mod' ? renderModMatrix() : (
-        <div>
-          {params.map(p => {
-            const v = gv(p.nrpn, p.def);
-            return (
-              <div class="param-row">
-                <label>{p.label}</label>
-                <input type="range" min={p.min} max={p.max} value={v}
-                  oninput={e => { sv(p.nrpn, parseInt(e.target.value)); render(); }} />
-                <span class="val">{v}</span>
-              </div>
-            );
-          })}
-        </div>
+  return html`<div>
+    <div class="ptabs">
+      ${[...Object.keys(PATCH_DEFS),'Mod'].map(t =>
+        html`<button class=${'btn btn-sm '+(S.patchTab===t?'btn-primary':'')}
+          onclick=${() => { S.patchTab=t; render(); }}>${t}</button>`
       )}
     </div>
-  );
+    ${S.patchTab==='Mod' ? renderModMatrix() : html`<div>
+      ${params.map(p => {
+        const v = gv(p.nrpn, p.def);
+        return html`<div class="param-row">
+          <label>${p.label}</label>
+          <input type="range" min=${p.min} max=${p.max} value=${v}
+            oninput=${e => { sv(p.nrpn, parseInt(e.target.value)); render(); }} />
+          <span class="val">${v}</span>
+        </div>`;
+      })}
+    </div>`}
+  </div>`;
 }
 
 function renderSeq() {
   const p = pat();
   const ll = Object.entries(LEN_MAP).find(([,v])=>v===S.stepLen)?.[0]||'?';
-  return (
-    <div>
-      <div style="margin-bottom:6px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-        <span>Pat: <b>{p.name}</b></span>
-        <span>Len: {p.len}</span>
-        <span>StepLen: {ll}/16</span>
-        <span style="color:#555;font-size:11px">Q-P/A-J=notes | SPACE=commit | BKSP=clear | 1-9=len | Arrows=nav</span>
-      </div>
-      <div class="step-grid">
-        {p.steps.slice(0,p.len).map((st,i) =>
-          <div class={`step${i===S.cursor?' cursor':''}${st.notes.length?' has-notes':''}`}
-            onclick={() => { S.cursor=i; drawRoll(); render(); }}>
-            {st.notes.length ? st.notes.map(n=>NOTE_NAMES[n.pitch%12]).join(' ') : (i===S.cursor?'_':'\u00b7')}
-          </div>
-        )}
-      </div>
+  return html`<div>
+    <div style="margin-bottom:6px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <span>Pat: <b>${p.name}</b></span>
+      <span>Len: ${p.len}</span>
+      <span>StepLen: ${ll}/16</span>
+      <span style="color:#555;font-size:11px">Q-P/A-J=notes | SPACE=commit | BKSP=clear | 1-9=len | Arrows=nav</span>
     </div>
-  );
+    <div class="step-grid">
+      ${p.steps.slice(0,p.len).map((st,i) =>
+        html`<div class=${'step'+(i===S.cursor?' cursor':'')+(st.notes.length?' has-notes':'')}
+          onclick=${() => { S.cursor=i; drawRoll(); render(); }}>
+          ${st.notes.length ? st.notes.map(n=>NOTE_NAMES[n.pitch%12]).join(' ') : (i===S.cursor?'_':'·')}
+        </div>`
+      )}
+    </div>
+  </div>`;
 }
 
 function renderPatterns() {
-  return (
-    <div>
-      <div class="pat-grid">
-        {S.patterns.map((p,i) =>
-          <div class={`pat${i===S.patIdx?' active':''}`}
-            onclick={() => { S.patIdx=i; S.cursor=0; drawRoll(); render(); }}>
-            <b>{p.name}</b>
-            <span>{p.len}st</span>
-          </div>
-        )}
-      </div>
-      <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        <button class="btn btn-sm" onclick={() => {
-          const src=pat(), ni=(S.patIdx+1)%16;
-          S.patterns[ni].steps=src.steps.map(s=>({...s,notes:s.notes.map(n=>({...n}))}));
-          S.patterns[ni].len=src.len; render();
-        }}>Copy&#8594;Next</button>
-        <button class="btn btn-sm btn-error" onclick={() => {
-          pat().steps.forEach(s=>{ s.notes=[]; }); drawRoll(); render();
-        }}>Clear</button>
-        <span style="color:#888">Len:</span>
-        {[8,16,32,64].map(n =>
-          <button class={`btn btn-sm${pat().len===n?' btn-primary':''}`}
-            onclick={() => { pat().len=n; if(S.cursor>=n) S.cursor=n-1; drawRoll(); render(); }}>{n}</button>
-        )}
-      </div>
-      <div style="margin-top:12px">
-        <b>Song Chain</b>
-        <div style="margin-top:4px;line-height:2">
-          {Array.from({length:16},(_,i) =>
-            <span class={`chain-slot${S.chain[i]!==undefined?' filled':''}`}
-              onclick={() => {
-                if(S.chain[i]!==undefined) S.chain.splice(i,1); else S.chain[i]=S.patIdx;
-                render();
-              }}>
-              {S.chain[i]!==undefined ? S.chain[i]+1 : '+'}
-            </span>
-          )}
-        </div>
-        <button class="btn btn-sm btn-error" style="margin-top:4px"
-          onclick={() => { S.chain=[]; render(); }}>Clear Chain</button>
-      </div>
+  return html`<div>
+    <div class="pat-grid">
+      ${S.patterns.map((p,i) =>
+        html`<div class=${'pat'+(i===S.patIdx?' active':'')}
+          onclick=${() => { S.patIdx=i; S.cursor=0; drawRoll(); render(); }}>
+          <b>${p.name}</b>
+          <span>${p.len}st</span>
+        </div>`
+      )}
     </div>
-  );
+    <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-sm" onclick=${() => {
+        const src=pat(), ni=(S.patIdx+1)%16;
+        S.patterns[ni].steps=src.steps.map(s=>({...s,notes:s.notes.map(n=>({...n}))}));
+        S.patterns[ni].len=src.len; render();
+      }}>Copy→Next</button>
+      <button class="btn btn-sm btn-error" onclick=${() => {
+        pat().steps.forEach(s=>{ s.notes=[]; }); drawRoll(); render();
+      }}>Clear</button>
+      <span style="color:#888">Len:</span>
+      ${[8,16,32,64].map(n =>
+        html`<button class=${'btn btn-sm'+(pat().len===n?' btn-primary':'')}
+          onclick=${() => { pat().len=n; if(S.cursor>=n) S.cursor=n-1; drawRoll(); render(); }}>${n}</button>`
+      )}
+    </div>
+    <div style="margin-top:12px">
+      <b>Song Chain</b>
+      <div style="margin-top:4px;line-height:2">
+        ${Array.from({length:16},(_,i) =>
+          html`<span class=${'chain-slot'+(S.chain[i]!==undefined?' filled':'')}
+            onclick=${() => {
+              if(S.chain[i]!==undefined) S.chain.splice(i,1); else S.chain[i]=S.patIdx;
+              render();
+            }}>
+            ${S.chain[i]!==undefined ? S.chain[i]+1 : '+'}
+          </span>`
+        )}
+      </div>
+      <button class="btn btn-sm btn-error" style="margin-top:4px"
+        onclick=${() => { S.chain=[]; render(); }}>Clear Chain</button>
+    </div>
+  </div>`;
 }
 
 function render() {
@@ -729,31 +711,31 @@ function render() {
   const TABS = ['seq','patch','patterns','midi','sysex'];
   const TLBL = {seq:'Sequencer',patch:'Patch Editor',patterns:'Patterns',midi:'MIDI',sysex:'SysEx'};
   applyDiff(document.getElementById('app'),
-    <div id="app">
+    html`<div id="app">
       <div id="toolbar">
         <b style="color:#4a9eff;margin-right:4px">Micron</b>
-        <button class={`btn btn-sm ${S.playing?'btn-error':'btn-primary'}`}
-          onclick={() => togglePlay()}>{S.playing?'Stop':'Play'}</button>
+        <button class=${'btn btn-sm '+(S.playing?'btn-error':'btn-primary')}
+          onclick=${() => togglePlay()}>${S.playing?'Stop':'Play'}</button>
         <label style="color:#888">BPM</label>
-        <input type="number" style="width:58px" value={S.bpm} min={20} max={300}
-          oninput={e => { S.bpm=Math.max(20,Math.min(300,parseInt(e.target.value)||120)); }} />
-        <span class={`midi-dot ${ok?'ok':''}`}></span>
-        {TABS.map(t =>
-          <button class={`btn btn-sm ${S.tab===t?'btn-primary':''}`}
-            onclick={() => { S.tab=t; render(); }}>{TLBL[t]}</button>
+        <input type="number" style="width:58px" value=${S.bpm} min="20" max="300"
+          oninput=${e => { S.bpm=Math.max(20,Math.min(300,parseInt(e.target.value)||120)); }} />
+        <span class=${'midi-dot'+(ok?' ok':'')}></span>
+        ${TABS.map(t =>
+          html`<button class=${'btn btn-sm '+(S.tab===t?'btn-primary':'')}
+            onclick=${() => { S.tab=t; render(); }}>${TLBL[t]}</button>`
         )}
       </div>
       <div id="roll-wrap">
         <canvas id="roll"></canvas>
       </div>
       <div id="panel">
-        {S.tab==='seq'      && renderSeq()}
-        {S.tab==='patch'    && renderPatch()}
-        {S.tab==='patterns' && renderPatterns()}
-        {S.tab==='midi'     && renderMidi()}
-        {S.tab==='sysex'    && renderSysex()}
+        ${S.tab==='seq'      ? renderSeq()      : null}
+        ${S.tab==='patch'    ? renderPatch()     : null}
+        ${S.tab==='patterns' ? renderPatterns()  : null}
+        ${S.tab==='midi'     ? renderMidi()      : null}
+        ${S.tab==='sysex'    ? renderSysex()     : null}
       </div>
-    </div>
+    </div>`
   );
   if (!RC || !document.getElementById('roll')) setTimeout(initCanvas, 0);
   else drawRoll();
