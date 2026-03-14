@@ -7,6 +7,25 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/rippleui@1.12.1/dist/css/styles.css">
 <style>
 :root{--c-bg:#0d0f14;--c-panel:#13151c;--c-border:#1e2130;--c-accent:#4a9eff;--c-accent2:#7c5cff;--c-warn:#ffb347;--c-err:#ff5252;--c-ok:#4caf50}
+body.light{--c-bg:#f0f2f5;--c-panel:#ffffff;--c-border:#d0d4e0;--c-accent:#1a6fd4;--c-accent2:#5a3ccc;--c-warn:#e08000;--c-err:#cc2020;--c-ok:#2a8a30}
+body.light{background:var(--c-bg);color:#222}
+body.light #toolbar{background:linear-gradient(180deg,#e0e4f0 0%,#f0f2f5 100%)}
+body.light .tbtn{background:linear-gradient(180deg,#e8eaf2 0%,#d8dae8 100%);color:#444;border-color:#b0b4c8}
+body.light .tbtn:hover{color:#000}
+body.light .tbtn.active{background:linear-gradient(180deg,#b8d0f0 0%,#8ab8e8 100%);color:var(--c-accent)}
+#shortcuts-overlay{display:none;position:fixed;inset:0;background:#000c;z-index:1001;align-items:center;justify-content:center}
+#shortcuts-overlay.show{display:flex}
+.shortcuts-box{background:var(--c-panel);border:1px solid var(--c-border);border-radius:8px;padding:20px;max-width:520px;width:90%;max-height:80vh;overflow-y:auto}
+.shortcuts-box h3{color:var(--c-accent);margin:0 0 12px}
+.shortcuts-box table{width:100%;border-collapse:collapse;font-size:11px}
+.shortcuts-box td{padding:3px 8px;border-bottom:1px solid var(--c-border)}
+.shortcuts-box td:first-child{color:var(--c-accent);font-weight:700;white-space:nowrap}
+.perf-pads{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px}
+.perf-pad{height:54px;border:1px solid #2a2d3a;border-radius:6px;background:#13151c;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;font-size:11px;user-select:none;transition:all .1s}
+.perf-pad:hover{border-color:var(--c-accent);background:#0d1a2a}
+.perf-pad.active{background:#0d2a4a;border-color:var(--c-accent);color:var(--c-accent)}
+.pitch-strip{width:24px;height:120px;border:1px solid #2a2d3a;border-radius:4px;background:#0d0f14;position:relative;cursor:ns-resize;flex-shrink:0}
+.pitch-strip-thumb{position:absolute;left:2px;right:2px;height:12px;background:var(--c-accent);border-radius:3px;transition:top .05s}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;height:100%;background:var(--c-bg);color:#ccc;font-family:'JetBrains Mono',monospace,monospace;font-size:12px}
 #app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
@@ -195,6 +214,29 @@ const S = {
   unsaved: false,
   rollViewX: 0,
   _clipPat: null,
+  abPatch: null,
+  favPatches: new Set(),
+  midiLearnTarget: null,
+  ccMap: {},
+  arpActive: false,
+  arpMode: 'up',
+  arpRate: 8,
+  arpOctaves: 2,
+  arpHeld: [],
+  arpStep: 0,
+  chordMode: false,
+  chordIntervals: [],
+  scale: null,
+  scaleRoot: 60,
+  swingAmt: 0,
+  backups: [],
+  theme: 'dark',
+  shortcutsVisible: false,
+  songChain: [],
+  songPos: 0,
+  midiThru: false,
+  sendClock: false,
+  pbVal: 64,
 };
 
 const pat = () => S.patterns[S.patIdx];
@@ -280,7 +322,12 @@ function handleMidiMsg(e) {
       if (!s.notes.find(n=>n.pitch===d[1])) s.notes.push({pitch:d[1],vel:d[2],len:S.stepLen});
       drawRoll();
     }
-  } else if (st===0xB0) { logMidi('cc',d); }
+  } else if (st===0xB0) {
+    logMidi('cc',d);
+    const cc=d[1], val=d[2];
+    if (S.midiLearnTarget) { S.ccMap[cc]=S.midiLearnTarget; S.midiLearnTarget=null; render(); return; }
+    if (S.ccMap[cc]) { const nrpn=parseInt(S.ccMap[cc]); if(!isNaN(nrpn)) sv(nrpn,val); }
+  }
   else { logMidi('?',d); }
   render();
 }
@@ -341,6 +388,91 @@ function loadSyx(file) {
   r.readAsArrayBuffer(file);
 }
 function requestBankDump() { let i=0; const n=()=>{ if(i<128){requestPatch(i++);setTimeout(n,200);}}; n(); }
+async function backupAll() {
+  S.backups = S.backups || [];
+  const snap = { ts: Date.now(), patches: [] };
+  for (let i = 0; i < 128; i++) {
+    requestPatch(i);
+    await new Promise(r => setTimeout(r, 220));
+    snap.patches.push(S.sysex.bank[i] ? JSON.parse(JSON.stringify(S.sysex.bank[i])) : null);
+  }
+  S.backups.push(snap);
+  try { localStorage.setItem('micron_backups', JSON.stringify(S.backups.slice(-5))); } catch(e) {}
+  render();
+}
+function restoreBackup(idx) {
+  const bk = S.backups[idx]; if (!bk) return;
+  bk.patches.forEach((p, i) => {
+    if (!p) return;
+    const bytes = [0, ...Array(7).fill(32)];
+    for (let j = 0; j < p.data.length; j++) bytes.push(p.data[j] ?? 0);
+    const packed = pack8to7(bytes);
+    const msg = [0xF0, 0x00, 0x00, 0x0E, 0x14, 0x02, ...packed, 0xF7];
+    setTimeout(() => midiOut(msg), i * 100);
+  });
+}
+function exportBackup(idx) {
+  const bk = S.backups[idx]; if (!bk) return;
+  const all = [];
+  bk.patches.forEach(p => {
+    if (!p) return;
+    const bytes = [0, ...Array(7).fill(32)];
+    for (let j = 0; j < p.data.length; j++) bytes.push(p.data[j] ?? 0);
+    const packed = pack8to7(bytes);
+    [0xF0, 0x00, 0x00, 0x0E, 0x14, 0x02, ...packed, 0xF7].forEach(b => all.push(b));
+  });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([new Uint8Array(all)], { type: 'application/octet-stream' }));
+  a.download = `micron_backup_${idx}.syx`; a.click();
+}
+
+function startMidiLearn(paramName) { S.midiLearnTarget = paramName; render(); }
+
+function humanize() {
+  pushUndo();
+  pat().steps.forEach(st => st.notes.forEach(n => {
+    n.vel = Math.max(1, Math.min(127, (n.vel || 100) + Math.round((Math.random() - 0.5) * 20)));
+  }));
+  drawRoll(); render();
+}
+function quantize() {
+  pushUndo();
+  pat().steps.forEach(st => st.notes.forEach(n => {
+    n.len = [0.0625, 0.125, 0.25, 0.5, 1].reduce((best, q) => Math.abs(q - n.len) < Math.abs(best - n.len) ? q : best, 0.0625);
+  }));
+  drawRoll(); render();
+}
+function scaleFilter(note) {
+  if (!S.scale) return note;
+  const root = S.scaleRoot % 12;
+  const oct = Math.floor(note / 12);
+  const pc = note % 12;
+  const shifted = ((pc - root) % 12 + 12) % 12;
+  const inScale = S.scale.find(s => s === shifted);
+  if (inScale !== undefined) return note;
+  const nearest = S.scale.reduce((best, s) => {
+    const db = Math.abs(((s - shifted) % 12 + 12) % 12);
+    const da = Math.abs(((shifted - s) % 12 + 12) % 12);
+    const dist = Math.min(db, da);
+    const bdist = Math.min(Math.abs(((best - shifted) % 12 + 12) % 12), Math.abs(((shifted - best) % 12 + 12) % 12));
+    return dist < bdist ? s : best;
+  }, S.scale[0]);
+  return oct * 12 + ((nearest + root) % 12);
+}
+function tickArp() {
+  if (!S.arpActive || !S.arpHeld.length) return;
+  const notes = [];
+  for (let o = 0; o < S.arpOctaves; o++) S.arpHeld.forEach(n => notes.push(n + o * 12));
+  let seq = notes.slice();
+  if (S.arpMode === 'down') seq = seq.slice().reverse();
+  else if (S.arpMode === 'updown') seq = [...seq, ...seq.slice(1, -1).reverse()];
+  else if (S.arpMode === 'random') seq.sort(() => Math.random() - 0.5);
+  const pitch = seq[S.arpStep % seq.length];
+  sendNoteOn(pitch, 90);
+  setTimeout(() => sendNoteOff(pitch), 60);
+  S.arpStep++;
+}
+
 function exportJSON() {
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([JSON.stringify({bpm:S.bpm,patterns:S.patterns,chain:S.chain,patch:S.patch},null,2)],{type:'application/json'}));
@@ -602,7 +734,8 @@ function onKeyDown(e) {
     if(e.key.toLowerCase()==='s'){ e.preventDefault(); saveState(); render(); return; }
     return;
   }
-  if(e.key==='?'||e.key==='/'){ document.getElementById('help-overlay').classList.toggle('show'); return; }
+  if(e.key==='Escape'){ S.shortcutsVisible=false; render(); return; }
+  if(e.key==='?'||e.key==='/'){ S.shortcutsVisible=!S.shortcutsVisible; render(); document.getElementById('help-overlay').classList.toggle('show'); return; }
   if(e.key.toLowerCase()==='m'){ S.metronome=!S.metronome; if(S.metronome&&!S.audioCtx) S.audioCtx=new AudioContext(); render(); return; }
   if(e.key.toLowerCase()==='t'){ tapTempo(); render(); return; }
   if(e.key==='z'){ S.octaveShift=Math.max(-4,S.octaveShift-1); render(); return; }
@@ -620,16 +753,23 @@ function onKeyDown(e) {
   if(e.key==='ArrowDown'){  S.pitchOffset=Math.max(0,S.pitchOffset-1);   drawRoll(); return; }
   if(!e.shiftKey&&LEN_MAP[e.key]){ S.stepLen=LEN_MAP[e.key]; render(); return; }
 
-  const pitch=keyPitch(e.key);
+  let pitch=keyPitch(e.key);
   if(!pitch) return;
+  pitch = scaleFilter(pitch);
   e.preventDefault();
   if(S.pressedKeys.has(pitch)) return;
   S.pressedKeys.add(pitch);
+  if(S.arpActive && !S.arpHeld.includes(pitch)) S.arpHeld.push(pitch);
+  const chordNotes = S.chordMode && S.chordIntervals.length
+    ? [pitch, ...S.chordIntervals.map(iv => scaleFilter(pitch + iv))]
+    : [pitch];
   if(!S.debounceActive) S.pending=[];
-  if(!S.pending.find(n=>n.pitch===pitch)){
-    S.pending.push({pitch,vel:100,len:S.stepLen});
-    previewNote(pitch);
-  }
+  chordNotes.forEach(p => {
+    if(!S.pending.find(n=>n.pitch===p)){
+      S.pending.push({pitch:p,vel:100,len:S.stepLen});
+      previewNote(p);
+    }
+  });
   step(S.cursor).notes=S.pending.map(n=>({...n}));
   S.debounceActive=true; S.debounceStart=Date.now();
   clearTimeout(S.debounceTimer);
@@ -638,7 +778,8 @@ function onKeyDown(e) {
 }
 
 function onKeyUp(e) {
-  const p=keyPitch(e.key); if(p) S.pressedKeys.delete(p);
+  const p=keyPitch(e.key);
+  if(p){ S.pressedKeys.delete(p); S.arpHeld=S.arpHeld.filter(n=>n!==scaleFilter(p)); }
 }
 
 function doUndo() {
@@ -699,12 +840,15 @@ function scheduler() {
   const stepDur=60/S.bpm/4;
   while(S.playTime<S.audioCtx.currentTime+0.12){
     const idx=S.playStep%pat().len;
+    const swingOffset=(S.swingAmt>0&&idx%2===1)?(stepDur*S.swingAmt/100):0;
+    const tPlay=S.playTime+swingOffset;
     const st=pat().steps[idx];
     if(st) st.notes.forEach(n=>{
       const dur=(n.len||S.stepLen)*16*stepDur*0.9;
-      midiOut([0x90|(S.midi.channel-1),n.pitch,n.vel||100],S.playTime*1000);
-      midiOut([0x80|(S.midi.channel-1),n.pitch,0],(S.playTime+dur)*1000);
+      midiOut([0x90|(S.midi.channel-1),n.pitch,n.vel||100],tPlay*1000);
+      midiOut([0x80|(S.midi.channel-1),n.pitch,0],(tPlay+dur)*1000);
     });
+    if(S.arpActive) tickArp();
     if(S.metronome) clickMetronome(barBeat%16===0?0:1);
     barBeat++; S.playTime+=stepDur; S.playStep++;
   }
@@ -963,6 +1107,14 @@ function renderSeq() {
         </div>`;
       })}
     </div>
+    <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center">
+      <button class="tbtn" onclick=${()=>humanize()} title="Add random jitter to velocity/timing">Humanize</button>
+      <button class="tbtn" onclick=${()=>quantize()} title="Snap note lengths to grid">Quantize</button>
+      <span style="color:#555;font-size:10px">Swing:</span>
+      <input type="range" min="0" max="50" value=${S.swingAmt} style="width:80px;accent-color:var(--c-accent)"
+        oninput=${e=>{ S.swingAmt=parseInt(e.target.value); render(); }} />
+      <span style="font-size:10px;color:#aaa">${S.swingAmt}%</span>
+    </div>
     <div style="margin-top:6px;font-size:10px;color:#333">
       Q-P/A-J notes · Z/X octave · Space advance · Bksp clear · 1-9 len · T tap · M metro · ? help
     </div>
@@ -996,7 +1148,7 @@ function renderPatterns() {
       ${[8,16,32,64].map(n=>html`<button class=${'tbtn'+(pat().len===n?' active':'')}
         onclick=${()=>{ pat().len=n; if(S.cursor>=n) S.cursor=n-1; drawRoll(); render(); }}>${n}</button>`)}
     </div>
-    <b style="font-size:11px;color:#666">Song Chain</b>
+    <b style="font-size:11px;color:#666">Quick Chain</b>
     <div style="margin-top:4px">
       ${Array.from({length:16},(_,i)=>html`<span
         class=${'chain-slot'+(S.chain[i]!==undefined?' filled':'')}
@@ -1005,6 +1157,24 @@ function renderPatterns() {
       </span>`)}
     </div>
     <button class="tbtn" style="margin-top:6px;border-color:#ff5252;color:#ff5252" onclick=${()=>{ S.chain=[]; render(); }}>Clear Chain</button>
+    <div style="margin-top:14px">
+      <b style="font-size:11px;color:#666">Song Mode</b>
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center">
+        <button class="tbtn active" onclick=${()=>{ S.songChain.push({pat:S.patIdx,reps:1}); render(); }}>+ Add Pat ${S.patIdx+1}</button>
+        <button class="tbtn" style="border-color:#ff5252;color:#ff5252" onclick=${()=>{ S.songChain=[]; S.songPos=0; render(); }}>Clear</button>
+        <button class=${'tbtn'+(S.playing?' stop':' play')} onclick=${()=>{ S.songPos=0; togglePlay(); }}>Play Song</button>
+      </div>
+      <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">
+        ${S.songChain.map((item,i)=>html`<div style="display:inline-flex;align-items:center;gap:3px;background:#0d1a2a;border:1px solid ${i===S.songPos&&S.playing?'var(--c-accent)':'#2a2d3a'};border-radius:4px;padding:2px 6px;font-size:10px">
+          <span style="color:var(--c-accent)">P${item.pat+1}</span>
+          <button class="tbtn" style="padding:0 3px;font-size:10px" onclick=${()=>{ item.reps=Math.max(1,item.reps-1); render(); }}>-</button>
+          <span>${item.reps}x</span>
+          <button class="tbtn" style="padding:0 3px;font-size:10px" onclick=${()=>{ item.reps++; render(); }}>+</button>
+          <button class="tbtn" style="padding:0 3px;font-size:10px;color:#ff5252" onclick=${()=>{ S.songChain.splice(i,1); render(); }}>✕</button>
+        </div>`)}
+        ${S.songChain.length===0?html`<span style="color:#333;font-size:10px">No song entries yet</span>`:null}
+      </div>
+    </div>
   </div>`;
 }
 
@@ -1063,6 +1233,24 @@ function renderMidi() {
       </div>
     </div>
     <div style="margin-top:10px">
+      <b style="font-size:11px;color:#666">MIDI Learn / CC Map</b>
+      <div style="margin:6px 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:10px;color:#888">Learn NRPN#:</span>
+        <input type="number" style="width:60px;background:#0d0f14;border:1px solid #2a2d3a;color:#fff;padding:2px 4px;border-radius:3px;font-family:inherit" value=${S.nrpnNum}
+          oninput=${e=>{ S.nrpnNum=parseInt(e.target.value)||0; }} />
+        <button class=${'tbtn'+(S.midiLearnTarget!==null?' active':'')} onclick=${()=>startMidiLearn(String(S.nrpnNum))}>
+          ${S.midiLearnTarget!==null?'Waiting CC…':'Start Learn'}
+        </button>
+        <button class="tbtn" onclick=${()=>{ S.midiLearnTarget=null; render(); }}>Cancel</button>
+      </div>
+      ${Object.keys(S.ccMap).length>0?html`<div style="font-size:10px;color:#666;margin-bottom:6px">
+        ${Object.entries(S.ccMap).map(([cc,nrpn])=>html`<span style="display:inline-flex;align-items:center;gap:3px;background:#0d1a2a;border:1px solid #2a2d3a;border-radius:3px;padding:1px 5px;margin:2px">
+          CC${cc}→NRPN${nrpn}
+          <button class="tbtn" style="padding:0 3px;font-size:9px;color:#ff5252" onclick=${()=>{ delete S.ccMap[cc]; render(); }}>✕</button>
+        </span>`)}
+      </div>`:null}
+    </div>
+    <div style="margin-top:10px">
       <b style="font-size:11px;color:#666">Manual NRPN</b>
       <div class="param-row" style="margin-top:4px">
         <label>NRPN #</label>
@@ -1110,14 +1298,125 @@ function renderSysex() {
       </div>
     </div>
     <div style="margin-top:10px">
+      <b style="font-size:11px;color:#666">Backups</b>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;align-items:center">
+        <button class="tbtn active" onclick=${()=>backupAll()}>Backup All 128 Patches</button>
+        <span style="font-size:10px;color:#555">${S.backups.length} backup(s) stored</span>
+      </div>
+      ${S.backups.map((bk,i)=>html`<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;font-size:10px">
+        <span style="color:#888">#${i+1} ${new Date(bk.ts).toLocaleString()}</span>
+        <button class="tbtn" onclick=${()=>restoreBackup(i)}>Restore</button>
+        <button class="tbtn" onclick=${()=>exportBackup(i)}>Export .syx</button>
+      </div>`)}
+    </div>
+    <div style="margin-top:10px">
       <b style="font-size:11px;color:#666">RX Log</b>
       <pre style="background:#0d0f14;padding:6px;border-radius:4px;font-size:10px;max-height:100px;overflow:auto;color:var(--c-accent);margin:4px 0 0;border:1px solid var(--c-border)">${sx.rxLog||'(none)'}</pre>
     </div>
   </div>`;
 }
 
+const SCALES = {
+  'Chromatic': null,
+  'Major': [0,2,4,5,7,9,11],
+  'Minor': [0,2,3,5,7,8,10],
+  'Dorian': [0,2,3,5,7,9,10],
+  'Phrygian': [0,1,3,5,7,8,10],
+  'Lydian': [0,2,4,6,7,9,11],
+  'Mixolydian': [0,2,4,5,7,9,10],
+  'Pentatonic': [0,2,4,7,9],
+  'Blues': [0,3,5,6,7,10],
+};
+const CHORD_PRESETS = {
+  'Off': [],
+  'Maj': [4,7],
+  'Min': [3,7],
+  'Dom7': [4,7,10],
+  'Maj7': [4,7,11],
+  'Min7': [3,7,10],
+  'Sus4': [5,7],
+};
+const PAD_NOTES = [60,62,64,65,67,69,71,72,48,50,52,53,55,57,59,36];
+
+function renderPerf() {
+  return html`<div>
+    <b style="font-size:11px;color:#666;display:block;margin-bottom:8px">Performance Pads</b>
+    <div class="perf-pads">
+      ${PAD_NOTES.map((note,i)=>html`<div
+        class=${'perf-pad'+(S.pressedKeys.has(note)?' active':'')}
+        onmousedown=${()=>{ sendNoteOn(note,100); S.pressedKeys.add(note); if(S.arpActive&&!S.arpHeld.includes(note)) S.arpHeld.push(note); drawRoll(); }}
+        onmouseup=${()=>{ sendNoteOff(note); S.pressedKeys.delete(note); S.arpHeld=S.arpHeld.filter(n=>n!==note); drawRoll(); }}
+        onmouseleave=${()=>{ sendNoteOff(note); S.pressedKeys.delete(note); S.arpHeld=S.arpHeld.filter(n=>n!==note); drawRoll(); }}>
+        <span>${NOTE_NAMES[note%12]}${Math.floor(note/12)-1}</span>
+      </div>`)}
+    </div>
+
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px">
+      <div style="flex:1;min-width:180px">
+        <b style="font-size:11px;color:#666;display:block;margin-bottom:6px">Arpeggiator</b>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <button class=${'tbtn'+(S.arpActive?' active':'')} onclick=${()=>{ S.arpActive=!S.arpActive; S.arpStep=0; render(); }}>${S.arpActive?'Arp ON':'Arp OFF'}</button>
+          <select style="background:#0d0f14;border:1px solid #2a2d3a;color:#ccc;font-family:inherit;font-size:10px;border-radius:3px;padding:2px 4px"
+            onchange=${e=>{ S.arpMode=e.target.value; render(); }}>
+            ${['up','down','updown','random'].map(m=>html`<option value=${m} selected=${S.arpMode===m}>${m}</option>`)}
+          </select>
+        </div>
+        <div class="param-row" style="margin-top:6px">
+          <label style="width:60px">Rate</label>
+          <input type="range" min="1" max="32" value=${S.arpRate} style="flex:1;accent-color:var(--c-accent)"
+            oninput=${e=>{ S.arpRate=parseInt(e.target.value); render(); }} />
+          <span class="val">${S.arpRate}</span>
+        </div>
+        <div class="param-row">
+          <label style="width:60px">Octaves</label>
+          <input type="range" min="1" max="4" value=${S.arpOctaves} style="flex:1;accent-color:var(--c-accent)"
+            oninput=${e=>{ S.arpOctaves=parseInt(e.target.value); render(); }} />
+          <span class="val">${S.arpOctaves}</span>
+        </div>
+      </div>
+
+      <div style="flex:1;min-width:180px">
+        <b style="font-size:11px;color:#666;display:block;margin-bottom:6px">Chord Memory</b>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <button class=${'tbtn'+(S.chordMode?' active':'')} onclick=${()=>{ S.chordMode=!S.chordMode; render(); }}>${S.chordMode?'Chord ON':'Chord OFF'}</button>
+          <select style="background:#0d0f14;border:1px solid #2a2d3a;color:#ccc;font-family:inherit;font-size:10px;border-radius:3px;padding:2px 4px"
+            onchange=${e=>{ S.chordIntervals=CHORD_PRESETS[e.target.value]||[]; render(); }}>
+            ${Object.keys(CHORD_PRESETS).map(k=>html`<option value=${k}>${k}</option>`)}
+          </select>
+        </div>
+        ${S.chordIntervals.length?html`<div style="font-size:10px;color:#888;margin-top:4px">+${S.chordIntervals.join(', ')} semitones</div>`:null}
+      </div>
+
+      <div style="flex:1;min-width:180px">
+        <b style="font-size:11px;color:#666;display:block;margin-bottom:6px">Scale Lock</b>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <select style="background:#0d0f14;border:1px solid #2a2d3a;color:#ccc;font-family:inherit;font-size:10px;border-radius:3px;padding:2px 4px"
+            onchange=${e=>{ S.scale=SCALES[e.target.value]; render(); }}>
+            ${Object.keys(SCALES).map(k=>html`<option value=${k} selected=${(S.scale===null&&k==='Chromatic')||(S.scale&&JSON.stringify(S.scale)===JSON.stringify(SCALES[k]))}>${k}</option>`)}
+          </select>
+          <select style="background:#0d0f14;border:1px solid #2a2d3a;color:#ccc;font-family:inherit;font-size:10px;border-radius:3px;padding:2px 4px"
+            onchange=${e=>{ S.scaleRoot=parseInt(e.target.value); render(); }}>
+            ${NOTE_NAMES.map((n,i)=>html`<option value=${i} selected=${S.scaleRoot%12===i}>${n}</option>`)}
+          </select>
+        </div>
+      </div>
+
+      <div style="flex:0;display:flex;flex-direction:column;align-items:center;gap:4px">
+        <b style="font-size:11px;color:#666">PB</b>
+        <div class="pitch-strip"
+          onmousedown=${e=>{ const r=e.currentTarget.getBoundingClientRect(); const pct=1-(e.clientY-r.top)/r.height; S.pbVal=Math.max(0,Math.min(127,Math.round(pct*127))); midiOut([0xE0|(S.midi.channel-1),0,S.pbVal]); render(); }}
+          onmousemove=${e=>{ if(e.buttons!==1) return; const r=e.currentTarget.getBoundingClientRect(); const pct=1-(e.clientY-r.top)/r.height; S.pbVal=Math.max(0,Math.min(127,Math.round(pct*127))); midiOut([0xE0|(S.midi.channel-1),0,S.pbVal]); render(); }}
+          onmouseup=${()=>{ S.pbVal=64; midiOut([0xE0|(S.midi.channel-1),0,64]); render(); }}>
+          <div class="pitch-strip-thumb" style=${'top:'+(Math.round((1-S.pbVal/127)*108))+'px'}></div>
+        </div>
+        <span style="font-size:9px;color:#555">${S.pbVal-64}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
 // ── MAIN RENDER ──────────────────────────────────────────────────────
-const TABS=[{id:'seq',label:'Sequencer'},{id:'patch',label:'Patch Editor'},{id:'patterns',label:'Patterns'},{id:'midi',label:'MIDI'},{id:'sysex',label:'SysEx'}];
+const TABS=[{id:'seq',label:'Sequencer'},{id:'patch',label:'Patch Editor'},{id:'patterns',label:'Patterns'},{id:'midi',label:'MIDI'},{id:'sysex',label:'SysEx'},{id:'perf',label:'Perf'}];
 
 function render() {
   const ok=!!S.midi.output;
@@ -1143,7 +1442,8 @@ function render() {
       <button class="tbtn" title="Save" onclick=${()=>{ saveState(); render(); }}>💾</button>
       <span id="unsaved" class=${S.unsaved?'show':''}>●</span>
       <div class="sep"></div>
-      <button class="tbtn" onclick=${()=>document.getElementById('help-overlay').classList.add('show')}>?</button>
+      <button class="tbtn" title="Toggle theme" onclick=${()=>{ S.theme=S.theme==='dark'?'light':'dark'; document.body.className=S.theme==='light'?'light':''; render(); }}>${S.theme==='dark'?'☀':'🌙'}</button>
+      <button class="tbtn" onclick=${()=>{ S.shortcutsVisible=!S.shortcutsVisible; render(); }}>?</button>
     </div>
     <div id="tabs-bar">
       ${TABS.map(t=>html`<button class=${'tab-btn'+(S.tab===t.id?' active':'')} onclick=${()=>{ S.tab=t.id; render(); }}>${t.label}</button>`)}
@@ -1155,8 +1455,42 @@ function render() {
       ${S.tab==='patterns' ? renderPatterns()  : null}
       ${S.tab==='midi'     ? renderMidi()      : null}
       ${S.tab==='sysex'    ? renderSysex()     : null}
+      ${S.tab==='perf'     ? renderPerf()      : null}
     </div>
   </div>`);
+
+  if(S.shortcutsVisible) {
+    let ov=document.getElementById('shortcuts-overlay');
+    if(!ov){ ov=document.createElement('div'); ov.id='shortcuts-overlay'; document.body.appendChild(ov); }
+    ov.className='show';
+    applyDiff(ov, html`<div id="shortcuts-overlay" class="show">
+      <div class="shortcuts-box">
+        <h3>Keyboard Shortcuts</h3>
+        <table>
+          <tr><td><kbd>Q-P / A-J</kbd></td><td>Input notes (QWERTY layout)</td></tr>
+          <tr><td><kbd>2 3 5 6 7</kbd></td><td>Black keys / sharps</td></tr>
+          <tr><td><kbd>Z / X</kbd></td><td>Octave down / up</td></tr>
+          <tr><td><kbd>Space</kbd></td><td>Commit step + advance cursor</td></tr>
+          <tr><td><kbd>Backspace</kbd></td><td>Clear current step</td></tr>
+          <tr><td><kbd>← →</kbd></td><td>Move cursor</td></tr>
+          <tr><td><kbd>↑ ↓</kbd></td><td>Scroll piano roll pitch</td></tr>
+          <tr><td><kbd>1-9</kbd></td><td>Step length</td></tr>
+          <tr><td><kbd>Ctrl+Space</kbd></td><td>Play / Stop</td></tr>
+          <tr><td><kbd>Ctrl+R</kbd></td><td>Record toggle</td></tr>
+          <tr><td><kbd>Ctrl+Z</kbd></td><td>Undo</td></tr>
+          <tr><td><kbd>Ctrl+S</kbd></td><td>Save</td></tr>
+          <tr><td><kbd>T</kbd></td><td>Tap tempo</td></tr>
+          <tr><td><kbd>M</kbd></td><td>Metronome toggle</td></tr>
+          <tr><td><kbd>?</kbd></td><td>This overlay</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Close overlay</td></tr>
+        </table>
+        <button class="tbtn" style="margin-top:12px" onclick=${()=>{ S.shortcutsVisible=false; render(); }}>Close</button>
+      </div>
+    </div>`);
+  } else {
+    const ov=document.getElementById('shortcuts-overlay');
+    if(ov) ov.className='';
+  }
 
   const rollEl=document.getElementById('roll');
   if(!RC||RC!==rollEl) setTimeout(initCanvas,0);
