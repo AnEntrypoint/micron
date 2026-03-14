@@ -1,0 +1,30 @@
+{
+  "project": "micron-editor",
+  "created": "2026-03-14",
+  "objective": "Build complete single-file Alesis Micron in-browser editor",
+  "items": [
+    {
+      "id": "1",
+      "subject": "Write complete index.html",
+      "status": "pending",
+      "blocking": [
+        "2"
+      ],
+      "blockedBy": [],
+      "effort": "large",
+      "category": "feature"
+    },
+    {
+      "id": "2",
+      "subject": "Git commit and push",
+      "status": "pending",
+      "blocking": [],
+      "blockedBy": [
+        "1"
+      ],
+      "effort": "small",
+      "category": "infra"
+    }
+  ],
+  "completed": []
+}
