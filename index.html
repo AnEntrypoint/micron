@@ -10,6 +10,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;height:100%;background:var(--c-bg);color:#ccc;font-family:'JetBrains Mono',monospace,monospace;font-size:12px}
 #app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+#app>div{flex:1;display:flex;flex-direction:column;overflow:hidden}
 #toolbar{display:flex;align-items:center;gap:6px;padding:5px 10px;background:linear-gradient(180deg,#1c2030 0%,#13151c 100%);border-bottom:1px solid var(--c-border);flex-shrink:0;flex-wrap:wrap;min-height:42px}
 .brand{font-weight:700;font-size:14px;color:var(--c-accent);letter-spacing:1px;margin-right:4px}
 .tbtn{padding:3px 9px;border-radius:4px;border:1px solid #2a2d3a;background:linear-gradient(180deg,#1e2230 0%,#161820 100%);color:#bbb;cursor:pointer;font-size:11px;font-family:inherit;transition:all .1s}
@@ -141,8 +142,8 @@ kbd{background:#1a1d26;border:1px solid #333;border-radius:3px;padding:1px 4px;f
 </div>
 <div id="ctx-menu-container"></div>
 <script type="module">
-import { createElement, applyDiff } from 'https://esm.sh/webjsx';
-import htm from 'https://esm.sh/htm@3';
+import { createElement, applyDiff } from 'https://esm.sh/webjsx@0.0.73';
+import htm from 'https://esm.sh/htm@3.1.1';
 const html = htm.bind(createElement);
 
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
@@ -1120,7 +1121,7 @@ const TABS=[{id:'seq',label:'Sequencer'},{id:'patch',label:'Patch Editor'},{id:'
 
 function render() {
   const ok=!!S.midi.output;
-  applyDiff(document.getElementById('app'), html`<div id="app">
+  applyDiff(document.getElementById('app'), html`<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
     <div id="toolbar">
       <span class="brand">MICRON</span>
       <div class="sep"></div>
