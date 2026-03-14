@@ -48,6 +48,7 @@ import { h, applyDiff } from 'https://esm.sh/webjsx@latest';
 // 1. STATE
 const S = {
   midi: { access: null, output: null, outputs: [], channel: 1 },
+  sysex: { lastRx: null, lastTx: null, rxLog: '', bank: Array(128).fill(null), presetNum: 0 },
   tab: 'seq',
   bpm: 120,
   playing: false,
@@ -83,7 +84,7 @@ const step = (i) => pat().steps[i] || pat().steps[0];
 // 2. MIDI
 async function initMIDI() {
   try {
-    S.midi.access = await navigator.requestMIDIAccess({ sysex: false });
+    S.midi.access = await navigator.requestMIDIAccess({ sysex: true });
     S.midi.outputs = [...S.midi.access.outputs.values()];
     if (S.midi.outputs.length) S.midi.output = S.midi.outputs[0];
     S.midi.access.onstatechange = () => {
@@ -118,12 +119,104 @@ function previewNote(pitch) {
 }
 
 function handleCC(e) {
-  if (!e.data || e.data[1] !== 1) return;
+  if (!e.data) return;
+  // SysEx: F0 00 00 0E 14 ...
+  if (e.data[0] === 0xF0 && e.data[1] === 0x00 && e.data[2] === 0x00 && e.data[3] === 0x0E && e.data[4] === 0x14) {
+    handleSysEx(e.data); return;
+  }
+  if (e.data[1] !== 1) return;
   const lensArr = [0.0625,0.125,0.25,0.5,1,1.5,2,3,4];
   const idx = Math.floor(e.data[2] / 128 * lensArr.length);
   const st = step(S.cursor);
   st.notes.forEach(n => { n.len = lensArr[Math.min(idx, lensArr.length-1)]; });
   drawRoll();
+}
+
+// SYSEX — Alesis Micron: F0 00 00 0E 14 [cmd] [...data] F7
+// cmd 0x00 = request patch, cmd 0x01 = patch dump response
+function pack8to7(bytes) {
+  const out = [];
+  for (let i = 0; i < bytes.length; i += 7) {
+    const chunk = bytes.slice(i, i+7);
+    let msbs = 0;
+    chunk.forEach((b,j) => { if (b & 0x80) msbs |= (1<<j); });
+    out.push(msbs & 0x7F);
+    chunk.forEach(b => out.push(b & 0x7F));
+  }
+  return out;
+}
+
+function unpack7to8(data) {
+  const out = [];
+  for (let i = 0; i < data.length; i += 8) {
+    const msbs = data[i];
+    for (let j = 1; j <= 7 && (i+j) < data.length; j++)
+      out.push(data[i+j] | (((msbs >> (j-1)) & 1) << 7));
+  }
+  return out;
+}
+
+function handleSysEx(data) {
+  const hex = Array.from(data).map(b=>b.toString(16).padStart(2,'0')).join(' ');
+  S.sysex.lastRx = data;
+  S.sysex.rxLog = hex.slice(0,500);
+  // cmd byte at index 5
+  const cmd = data[5];
+  if (cmd === 0x01 || cmd === 0x02) {
+    // patch dump: bytes 6..n-1 are 7-bit packed patch data
+    const raw = Array.from(data).slice(6, data.length-1);
+    const unpacked = unpack7to8(raw);
+    // first 8 bytes = patch name ASCII
+    const name = unpacked.slice(0,8).map(b=>String.fromCharCode(b||32)).join('').trim();
+    // remaining bytes map to NRPN 0..N in order
+    for (let i = 8; i < unpacked.length; i++) S.patch[i-8] = unpacked[i];
+    if (S.sysex.presetNum >= 0) S.sysex.bank[S.sysex.presetNum] = { name, data: unpacked };
+    S.sysex.rxLog = `Rx: "${name}" (${unpacked.length} params)\n` + hex.slice(0,400);
+  }
+  render();
+}
+
+function requestPatch(presetNum) {
+  presetNum = presetNum ?? S.sysex.presetNum;
+  S.sysex.presetNum = presetNum;
+  const msg = [0xF0, 0x00, 0x00, 0x0E, 0x14, 0x00, presetNum & 0x7F, 0xF7];
+  S.sysex.lastTx = msg;
+  midiOut(msg);
+}
+
+function sendPatchDump() {
+  // Serialize S.patch into ordered bytes (NRPN 0..N)
+  const maxNrpn = Math.max(0, ...Object.keys(S.patch).map(Number));
+  const bytes = [0,...Array(7).fill(32)]; // 8-byte name (spaces)
+  for (let i = 0; i <= maxNrpn; i++) bytes.push(S.patch[i] ?? 0);
+  const packed = pack8to7(bytes);
+  const msg = [0xF0, 0x00, 0x00, 0x0E, 0x14, 0x02, ...packed, 0xF7];
+  S.sysex.lastTx = msg;
+  midiOut(msg);
+}
+
+function saveSyx() {
+  const data = S.sysex.lastRx || S.sysex.lastTx;
+  if (!data) return;
+  const blob = new Blob([new Uint8Array(data)], {type:'application/octet-stream'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'micron_patch.syx'; a.click();
+}
+
+function loadSyx(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const bytes = new Uint8Array(e.target.result);
+    handleSysEx(bytes);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function requestBankDump() {
+  // Request all 128 presets sequentially with 200ms gap
+  let i = 0;
+  const next = () => { if (i < 128) { requestPatch(i++); setTimeout(next, 200); } };
+  next();
 }
 
 // 3. CANVAS PIANO ROLL
@@ -433,6 +526,48 @@ const gv = (nrpn, def) => S.patch[nrpn] !== undefined ? S.patch[nrpn] : def;
 const sv = (nrpn, val) => { S.patch[nrpn] = val; sendNRPN(nrpn, val + 64); };
 
 // 8. RENDER FUNCTIONS
+function renderSysex() {
+  const sx = S.sysex;
+  return (
+    <div>
+      <div class="param-row" style="flex-wrap:wrap;gap:6px">
+        <button class="btn btn-sm btn-primary" onclick={() => requestPatch(sx.presetNum)}>Request Patch</button>
+        <button class="btn btn-sm btn-primary" onclick={() => sendPatchDump()}>Send Patch</button>
+        <button class="btn btn-sm" onclick={() => saveSyx()}>Save .syx</button>
+        <label class="btn btn-sm" style="cursor:pointer">Load .syx
+          <input type="file" accept=".syx,.mid" style="display:none"
+            onchange={e => e.target.files[0] && loadSyx(e.target.files[0])} />
+        </label>
+        <button class="btn btn-sm" onclick={() => requestBankDump()}>Dump All 128</button>
+      </div>
+      <div class="param-row" style="margin-top:8px">
+        <label>Preset #</label>
+        <input type="number" style="width:60px" value={sx.presetNum} min={0} max={127}
+          oninput={e => { sx.presetNum = parseInt(e.target.value)||0; }} />
+        <span style="color:#666;font-size:11px">(0–127)</span>
+      </div>
+      <div style="margin-top:10px">
+        <b style="font-size:12px">Patch Bank</b>
+        <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;max-height:160px;overflow-y:auto">
+          {Array.from({length:128},(_,i) => {
+            const p = sx.bank[i];
+            return <div
+              style={`width:72px;height:28px;border:1px solid ${i===sx.presetNum?'#4a9eff':'#333'};border-radius:3px;background:${p?'#1e3a5f':'#1a1d26'};display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer;overflow:hidden;padding:0 2px`}
+              onclick={() => { sx.presetNum=i; requestPatch(i); render(); }}>
+              {p ? p.name : i}
+            </div>;
+          })}
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <b style="font-size:12px">RX Log</b>
+        <pre style="background:#111;padding:6px;border-radius:4px;font-size:10px;max-height:100px;overflow:auto;color:#4a9eff;margin:4px 0 0">{sx.rxLog || '(none)'}</pre>
+      </div>
+    </div>
+  );
+}
+
+
 function renderMidi() {
   const ok = !!S.midi.output;
   return (
@@ -591,8 +726,8 @@ function renderPatterns() {
 
 function render() {
   const ok = !!S.midi.output;
-  const TABS = ['seq','patch','patterns','midi'];
-  const TLBL = {seq:'Sequencer',patch:'Patch Editor',patterns:'Patterns',midi:'MIDI'};
+  const TABS = ['seq','patch','patterns','midi','sysex'];
+  const TLBL = {seq:'Sequencer',patch:'Patch Editor',patterns:'Patterns',midi:'MIDI',sysex:'SysEx'};
   applyDiff(document.getElementById('app'),
     <div id="app">
       <div id="toolbar">
@@ -616,6 +751,7 @@ function render() {
         {S.tab==='patch'    && renderPatch()}
         {S.tab==='patterns' && renderPatterns()}
         {S.tab==='midi'     && renderMidi()}
+        {S.tab==='sysex'    && renderSysex()}
       </div>
     </div>
   );

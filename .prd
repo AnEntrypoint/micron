@@ -1,0 +1,48 @@
+{
+  "project": "micron-sysex",
+  "created": "2026-03-14",
+  "objective": "Add full Alesis Micron SysEx management, test and fix browser issues, commit and push",
+  "items": [
+    {
+      "id": "1",
+      "subject": "Implement SysEx tab in index.html",
+      "status": "pending",
+      "description": "Add S.sysex state, pack8to7/unpack7to8 functions, handleSysEx, sendPatchDump, renderSysex, update MIDI init to sysex:true, add SysEx tab to TABS array",
+      "blocking": ["2"],
+      "blockedBy": [],
+      "effort": "large",
+      "category": "feature",
+      "acceptance": [
+        "SysEx tab appears in toolbar",
+        "Request Patch Dump button sends correct SysEx bytes",
+        "Send Patch to Device serializes and sends",
+        "Save .syx File triggers blob download",
+        "Load .syx File parses and populates patch",
+        "128-slot bank grid renders",
+        "Raw hex dump textarea shows last message",
+        "Bulk dump button sends 128 requests"
+      ]
+    },
+    {
+      "id": "2",
+      "subject": "Test and fix all browser issues on GitHub Pages",
+      "status": "pending",
+      "description": "Use agent-browser to navigate to https://anentrypoint.github.io/micron/, screenshot, check console errors, test all tabs including new SysEx tab, fix any JS errors found",
+      "blocking": ["3"],
+      "blockedBy": ["1"],
+      "effort": "medium",
+      "category": "bug"
+    },
+    {
+      "id": "3",
+      "subject": "Commit and push all changes",
+      "status": "pending",
+      "description": "git add -A && git commit && git push",
+      "blocking": [],
+      "blockedBy": ["2"],
+      "effort": "small",
+      "category": "infra"
+    }
+  ],
+  "completed": []
+}
