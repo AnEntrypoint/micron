@@ -110,7 +110,8 @@ export function handleSysEx(data) {
   if (content === 1) {
     const parsed = parsePatchDump(data);
     if (parsed) {
-      const { bank, slot, name, params } = parsed;
+      let { bank, slot, name, params } = parsed;
+      if (bank === 4 && S._lastReqBank !== undefined) { bank = S._lastReqBank; slot = S._lastReqSlot; }
       if (!S.sysexBanks) S.sysexBanks = [Array(128).fill(null),Array(128).fill(null),Array(128).fill(null),Array(128).fill(null)];
       if (bank>=0&&bank<4&&slot>=0&&slot<128) S.sysexBanks[bank][slot] = {name, params};
       if (bank===S.sysexSelectedBank) S.sysexBank[slot] = {name, params};

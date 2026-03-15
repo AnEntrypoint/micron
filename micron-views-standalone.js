@@ -90,7 +90,7 @@ export function renderStandaloneTab() {
       <h4>Patches by Bank</h4>
       ${BANKS.map((bname,bi)=>html`<div>
         <b>${bname}</b> — ${(S.sysexBanks[bi]||[]).filter(Boolean).length} / 128 received
-        <button class=tbtn onclick=${()=>requestBank(bi)}>Request ${bname}</button>
+        <button class=tbtn onclick=${()=>requestBankIndividual(bi)}>Request ${bname}</button>
       </div>`)}
       <div class=standalone-list style="margin-top:8px">
         ${(S.sysexBanks[S.sysexSelectedBank]||[]).map((p,i)=>p?html`<div class=standalone-slot>
@@ -100,6 +100,16 @@ export function renderStandaloneTab() {
       </div>
     </div>
   </div>`;
+}
+
+async function requestBankIndividual(bankIdx) {
+  const { requestPatch } = await import('./micron-sysex.js');
+  for (let s = 0; s < 128; s++) {
+    requestPatch(bankIdx, s);
+    S._lastReqBank = bankIdx;
+    S._lastReqSlot = s;
+    await new Promise(res => setTimeout(res, 120));
+  }
 }
 
 function getSlot(type, i) {
@@ -137,20 +147,29 @@ async function sendEverything() {
 }
 
 async function requestEverything() {
-  const bankRequests = BANKS.length;
-  const total = bankRequests + 2;
-  S.syncProgress = {done:0, total, label:'Requesting', startedAt: Date.now()};
-  render();
+  const total = BANKS.length * 128 + 2;
+  S.syncProgress = {done:0, total, label:'Patches', startedAt: Date.now()};
+  S._reqQueue = [];
   for (let b = 0; b < BANKS.length; b++) {
-    requestBank(b);
-    S.syncProgress.done++;
-    render();
-    await new Promise(res => setTimeout(res, 150));
+    for (let s = 0; s < 128; s++) S._reqQueue.push({bank: b, slot: s});
   }
+  render();
+  for (const {bank, slot} of S._reqQueue) {
+    import('./micron-sysex.js').then(m => {
+      m.requestPatch(bank, slot);
+      S._lastReqBank = bank;
+      S._lastReqSlot = slot;
+    });
+    S.syncProgress.done++;
+    if (S.syncProgress.done % 10 === 0) render();
+    await new Promise(res => setTimeout(res, 120));
+  }
+  S.syncProgress.label = 'Patterns';
   requestAllPatterns();
   S.syncProgress.done++;
   render();
-  await new Promise(res => setTimeout(res, 150));
+  await new Promise(res => setTimeout(res, 200));
+  S.syncProgress.label = 'Rhythms';
   requestAllRhythms();
   S.syncProgress.done++;
   render();
