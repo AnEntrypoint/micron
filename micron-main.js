@@ -9,6 +9,9 @@ import { renderPatternsTab, setRender as patSetRender } from './micron-views-pat
 import { renderMIDITab, setRender as midiSetRender } from './micron-views-midi.js';
 import { renderPerfTab, setRender as perfSetRender } from './micron-views-perf.js';
 import { renderLibraryTab, setRender as libSetRender } from './micron-views-library.js';
+import { renderRhythmTab, setRender as rhythmSetRender } from './micron-views-rhythm.js';
+import { renderConfigTab, setRender as configSetRender } from './micron-views-config.js';
+import { renderStandaloneTab, setRender as standaloneSetRender } from './micron-views-standalone.js';
 import { drawRoll, schedulePlayback, initRoll } from './micron-sequencer.js';
 import { initGamepad, playNote, releaseNote, tapTempo } from './micron-perf.js';
 import { noteColor, isBlack, NOTE_NAMES, velColor, stepFracLabel } from './micron-data.js';
@@ -146,7 +149,7 @@ function renderBottomNav() {
   </div>`;
 }
 
-const TAB_VIEWS = {seq:renderSeqTab,patch:renderPatchTab,patterns:renderPatternsTab,midi:renderMIDITab,perf:renderPerfTab,sysex:renderSysExTab,library:renderLibraryTab};
+const TAB_VIEWS = {seq:renderSeqTab,patch:renderPatchTab,patterns:renderPatternsTab,rhythm:renderRhythmTab,midi:renderMIDITab,perf:renderPerfTab,sysex:renderSysExTab,config:renderConfigTab,standalone:renderStandaloneTab,library:renderLibraryTab};
 
 function doRender() {
   const view = TAB_VIEWS[S.tab] || renderSeqTab;
@@ -162,8 +165,7 @@ function doRender() {
 
 window._micronRender = () => schedRender();
 setRenderFn(doRender);
-[sysexSetRender,patSetRender,midiSetRender,perfSetRender,libSetRender].forEach(fn=>fn(schedRender));
-
+[sysexSetRender,patSetRender,midiSetRender,perfSetRender,libSetRender,rhythmSetRender,configSetRender,standaloneSetRender].forEach(fn=>fn(schedRender));
 document.addEventListener('keydown', e => {
   if (e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA') return;
   const note = BASE_KEYS[e.key];
@@ -173,8 +175,6 @@ document.addEventListener('keydown', e => {
   if (e.key==='ArrowLeft') { S.cursor=Math.max(0,S.cursor-1); schedRender(); }
   if (e.key==='z'&&(e.ctrlKey||e.metaKey)) { import('./micron-state.js').then(m=>{const u=m.popUndo();if(u){S.patch=u;import('./micron-patch.js').then(p=>p.sendAllParams(S.patch));schedRender();}}); }
 });
-
-
 document.addEventListener('keyup', e => {
   const note = BASE_KEYS[e.key];
   if (note) releaseNote(note+S.octaveShift*12);

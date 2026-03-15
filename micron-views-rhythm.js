@@ -1,0 +1,148 @@
+import { html } from './micron-ui-core.js';
+import { S, rhythm, saveState, defaultRhythm } from './micron-state.js';
+import { sendRhythmSysEx, requestRhythm } from './micron-sysex.js';
+
+let render = ()=>{};
+export function setRender(fn) { render=fn; }
+
+const DRUM_LETTERS = 'ABCDEFGHIJ';
+const BAR_STEPS = {4:4, 8:8, 16:16, 32:32, 64:64};
+const GRIDS = [0.0625, 0.125, 0.25, 0.5];
+const GRID_LABELS = {0.0625:'1/16',0.125:'1/8',0.25:'1/4',0.5:'1/2'};
+
+export function renderRhythmTab() {
+  const r = rhythm();
+  return html`<div>
+    <div class=section>
+      <h4>Rhythms</h4>
+      <div class=rhythm-selector>
+        <select onchange=${e=>{S.rhythmIdx=+e.target.value;render();}}>
+          ${S.rhythms.map((rh,i)=>html`<option value=${i} selected=${S.rhythmIdx===i}>${rh.name}</option>`)}
+        </select>
+        <button class=tbtn onclick=${()=>newRhythm()}>New</button>
+        <button class=tbtn onclick=${()=>copyRhythm()}>Copy</button>
+        <button class="tbtn warn" onclick=${()=>clearRhythm()}>Clear</button>
+        <button class="tbtn warn" onclick=${()=>deleteRhythm()}>Delete</button>
+      </div>
+    </div>
+    <div class=section>
+      <h4>Rhythm Settings</h4>
+      <div class=pr>
+        <label>Name</label>
+        <input type=text value=${r.name} oninput=${e=>{r.name=e.target.value;saveState();render();}} class=name-in />
+      </div>
+      <div class=pr>
+        <label>Length (steps)</label>
+        <div class=slen-grid>
+          ${Object.entries(BAR_STEPS).map(([k,v])=>html`<button class=${'slen-btn'+(r.len===v?' active':'')} onclick=${()=>setLen(v)}>${k}</button>`)}
+        </div>
+      </div>
+      <div class=pr>
+        <label>Grid</label>
+        <select onchange=${e=>{r.grid=+e.target.value;saveState();render();}}>
+          ${GRIDS.map(g=>html`<option value=${g} selected=${r.grid===g}>${GRID_LABELS[g]}</option>`)}
+        </select>
+      </div>
+      <div class=pr>
+        <label>Tempo</label>
+        <input type=number min=20 max=300 value=${r.tempo||120} oninput=${e=>{r.tempo=+e.target.value;saveState();}} class=num-in />
+        <span class=unit>BPM</span>
+      </div>
+    </div>
+    <div class=section>
+      <h4>Drums</h4>
+      ${r.drums.map((drum,di)=>renderDrumRow(drum,di,r))}
+      ${r.drums.length < 10 ? html`<button class=tbtn onclick=${()=>addDrum()}>+ Add Drum</button>` : null}
+    </div>
+    <div class=section>
+      <h4>SysEx</h4>
+      <div class=btn-group>
+        <button class=tbtn onclick=${()=>sendToMicron()}>Send to Micron</button>
+        <button class=tbtn onclick=${()=>requestFromMicron()}>Request from Micron</button>
+      </div>
+      <div class=pr>
+        <label>Slot</label>
+        <input type=number min=0 max=127 value=${S.rhythmSysexSlot||0} oninput=${e=>{S.rhythmSysexSlot=+e.target.value;}} class=num-in />
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderDrumRow(drum, di, r) {
+  return html`<div class=drum-row>
+    <div class=drum-header>
+      <span class=drum-letter>Drum ${DRUM_LETTERS[di]}</span>
+      <input type=text value=${drum.program} oninput=${e=>{drum.program=e.target.value;saveState();}} placeholder="Program name" class=drum-pgm />
+      <label>Lvl</label>
+      <input type=number min=0 max=100 value=${drum.level} oninput=${e=>{drum.level=+e.target.value;saveState();}} class=num-in style="width:48px" />
+      <label>Pan</label>
+      <input type=number min=-50 max=50 value=${drum.pan} oninput=${e=>{drum.pan=+e.target.value;saveState();}} class=num-in style="width:48px" />
+      ${r.drums.length > 1 ? html`<button class="tbtn warn" onclick=${()=>removeDrum(di)}>×</button>` : null}
+    </div>
+    <div class=rhythm-grid>
+      ${drum.steps.slice(0,r.len).map((s,si)=>html`<div
+        class=${'rhythm-step'+(s.active?' active':'')+(si%4===0?' beat-start':'')}
+        onclick=${()=>{s.active=!s.active;saveState();render();}}
+        oncontextmenu=${e=>{e.preventDefault();editStepVel(drum,si);}}
+        title=${'Step '+(si+1)+' vel:'+s.vel}
+        style=${s.active?`--vel-h:${Math.round(s.vel/127*100)}%`:''}
+      ></div>`)}
+    </div>
+  </div>`;
+}
+
+function editStepVel(drum, si) {
+  const v = prompt('Velocity (1-127):', drum.steps[si].vel);
+  if (v !== null) { drum.steps[si].vel = Math.max(1,Math.min(127,+v)); saveState(); render(); }
+}
+
+function setLen(v) {
+  const r = rhythm();
+  r.len = v;
+  r.drums.forEach(d => { while(d.steps.length < v) d.steps.push({active:false,vel:100}); });
+  saveState(); render();
+}
+
+function addDrum() {
+  rhythm().drums.push({program:'', level:100, pan:0, steps:Array.from({length:64},()=>({active:false,vel:100}))});
+  saveState(); render();
+}
+
+function removeDrum(di) {
+  rhythm().drums.splice(di, 1);
+  saveState(); render();
+}
+
+function newRhythm() {
+  S.rhythms.push(defaultRhythm());
+  S.rhythmIdx = S.rhythms.length - 1;
+  saveState(); render();
+}
+
+function copyRhythm() {
+  const copy = JSON.parse(JSON.stringify(rhythm()));
+  copy.name = copy.name + ' (copy)';
+  S.rhythms.push(copy);
+  S.rhythmIdx = S.rhythms.length - 1;
+  saveState(); render();
+}
+
+function clearRhythm() {
+  rhythm().drums.forEach(d => d.steps.forEach(s => { s.active=false; }));
+  saveState(); render();
+}
+
+function deleteRhythm() {
+  if (S.rhythms.length <= 1) return;
+  S.rhythms.splice(S.rhythmIdx, 1);
+  S.rhythmIdx = Math.min(S.rhythmIdx, S.rhythms.length - 1);
+  saveState(); render();
+}
+
+function sendToMicron() {
+  sendRhythmSysEx(rhythm(), S.rhythmSysexSlot || 0);
+}
+
+function requestFromMicron() {
+  requestRhythm(S.rhythmSysexSlot || 0);
+}

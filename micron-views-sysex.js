@@ -1,9 +1,12 @@
 import { html } from './micron-ui-core.js';
 import { S } from './micron-state.js';
-import { requestPatch, requestBank, parsePatchDump } from './micron-sysex.js';
+import { requestPatch, requestBank, parsePatchDump, requestPattern, requestRhythm } from './micron-sysex.js';
 import { BANKS, PATCH_CATEGORIES } from './micron-data.js';
 import { defaultPatch, sendAllParams } from './micron-patch.js';
 import { addToLibrary } from './micron-state.js';
+
+const CONTENT_TYPES = ['patch','rhythm','pattern'];
+if (!S.sysexContentType) S.sysexContentType = 'patch';
 
 let render = ()=>{};
 export function setRender(fn) { render=fn; }
@@ -12,20 +15,26 @@ export function renderSysExTab() {
   return html`<div>
     <div class=grid2>
       <div class=section>
-        <h4>Request Patch</h4>
+        <h4>Request from Micron</h4>
         <div class=pr>
+          <label>Type</label>
+          <select onchange=${e=>{S.sysexContentType=e.target.value;render();}}>
+            ${CONTENT_TYPES.map(t=>html`<option value=${t} selected=${S.sysexContentType===t}>${t}</option>`)}
+          </select>
+        </div>
+        ${S.sysexContentType==='patch'?html`<div class=pr>
           <label>Bank</label>
           <select onchange=${e=>{S.sysexSelectedBank=+e.target.value;render();}}>
             ${BANKS.map((b,i)=>html`<option value=${i} selected=${S.sysexSelectedBank===i}>${b}</option>`)}
           </select>
-        </div>
+        </div>`:null}
         <div class=pr>
           <label>Slot</label>
-          <input type=number min=0 max=${S.sysexSelectedBank===4?3:127} value=${S.sysexSelectedSlot} oninput=${e=>{S.sysexSelectedSlot=Math.max(0,Math.min(S.sysexSelectedBank===4?3:127,+e.target.value));}} class=num-in />
+          <input type=number min=0 max=127 value=${S.sysexSelectedSlot} oninput=${e=>{S.sysexSelectedSlot=Math.max(0,Math.min(127,+e.target.value));}} class=num-in />
         </div>
         <div class=btn-group>
-          <button class=tbtn onclick=${()=>doRequest()}>Request Single Patch</button>
-          <button class=tbtn onclick=${()=>doRequestBank()}>Request Full Bank</button>
+          <button class=tbtn onclick=${()=>doRequest()}>Request Single</button>
+          <button class=tbtn onclick=${()=>doRequestAll()}>Request All</button>
         </div>
         <div class=pr>
           <label>Import .syx</label>
@@ -59,32 +68,54 @@ export function renderSysExTab() {
 }
 
 function doRequest() {
-  const msg = [0xF0,0x00,0x00,0x0E,0x22,0x41,S.sysexSelectedBank&0x0F,0x00,S.sysexSelectedSlot&0x7F,0xF7];
-  import('./micron-midi.js').then(({midiOut}) => midiOut(msg));
-  S.sysexLog = `Requested patch ${S.sysexSelectedSlot} from bank ${BANKS[S.sysexSelectedBank]}`;
+  if (S.sysexContentType === 'patch') {
+    const msg = [0xF0,0x00,0x00,0x0E,0x22,0x41,S.sysexSelectedBank&0x0F,0x00,S.sysexSelectedSlot&0x7F,0xF7];
+    import('./micron-midi.js').then(({midiOut}) => midiOut(msg));
+    S.sysexLog = `Requested patch ${S.sysexSelectedSlot} from bank ${BANKS[S.sysexSelectedBank]}`;
+  } else if (S.sysexContentType === 'pattern') {
+    requestPattern(S.sysexSelectedSlot);
+    S.sysexLog = `Requested pattern ${S.sysexSelectedSlot}`;
+  } else {
+    requestRhythm(S.sysexSelectedSlot);
+    S.sysexLog = `Requested rhythm ${S.sysexSelectedSlot}`;
+  }
   render();
 }
 
-function doRequestBank() {
-  const msg = [0xF0,0x00,0x00,0x0E,0x22,0x41,S.sysexSelectedBank&0x0F,0x01,0x00,0xF7];
-  import('./micron-midi.js').then(({midiOut}) => midiOut(msg));
-  S.sysexLog = `Requested full bank ${BANKS[S.sysexSelectedBank]}`;
+function doRequestAll() {
+  if (S.sysexContentType === 'patch') {
+    const msg = [0xF0,0x00,0x00,0x0E,0x22,0x41,S.sysexSelectedBank&0x0F,0x01,0x00,0xF7];
+    import('./micron-midi.js').then(({midiOut}) => midiOut(msg));
+    S.sysexLog = `Requested full bank ${BANKS[S.sysexSelectedBank]}`;
+  } else if (S.sysexContentType === 'pattern') {
+    import('./micron-sysex.js').then(m=>m.requestAllPatterns());
+    S.sysexLog = 'Requested all patterns';
+  } else {
+    import('./micron-sysex.js').then(m=>m.requestAllRhythms());
+    S.sysexLog = 'Requested all rhythms';
+  }
   render();
 }
 
 export function handleSysEx(data) {
   const hex = Array.from(data).map(b=>b.toString(16).padStart(2,'0')).join(' ');
   S.sysexLog = `Rx: [${data.length}b] ${hex.slice(0,120)}...`;
-  if (data[1]===0x00&&data[2]===0x00&&data[3]===0x0E&&data[4]===0x22) {
+  if (!(data[1]===0x00&&data[2]===0x00&&data[3]===0x0E&&data[4]===0x22)) { render(); return; }
+  const content = data[5];
+  if (content === 0x41 || content === 1) {
     const parsed = parsePatchDump(data);
     if (parsed) {
       const slot = parsed.slot;
       if (slot>=0&&slot<128) S.sysexBank[slot] = {name:parsed.name, params:parsed.params};
       S.patch = {...defaultPatch(), ...parsed.params};
       sendAllParams(S.patch);
-      S.sysexLog = `Rx: "${parsed.name}" slot ${slot}, ${Object.keys(parsed.params).length} params`;
+      S.sysexLog = `Rx patch: "${parsed.name}" slot ${slot}`;
       addToLibrary(parsed.name, parsed.params, parsed.params.category||0);
     }
+  } else if (content === 3) {
+    S.sysexLog = `Rx pattern data [${data.length}b]`;
+  } else if (content === 2) {
+    S.sysexLog = `Rx rhythm/setup data [${data.length}b]`;
   }
   render();
 }

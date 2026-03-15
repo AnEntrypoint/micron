@@ -1,5 +1,25 @@
 import { defaultPatch } from './micron-patch.js';
 
+export const defaultRhythm = () => ({
+  name: 'New Rhythm',
+  len: 16,
+  grid: 0.0625,
+  tempo: 120,
+  drums: [{program: 'Kick', level: 100, pan: 0, steps: Array.from({length:64},()=>({active:false,vel:100}))}]
+});
+
+export const defaultConfig = () => ({
+  contrast: 8,
+  tuning: 0,
+  transpose: 0,
+  velocityCurveType: 'linear-med',
+  localControl: 'on',
+  midiSetupMode: 'single',
+  midiChannel: 1,
+  midiSync: 'off',
+  storeProtect: true
+});
+
 export const S = {
   midi: { channel:1 },
   tab: 'seq',
@@ -67,6 +87,12 @@ export const S = {
   sysexBankFilter: '',
   sysexSelectedBank: 3,
   sysexSelectedSlot: 0,
+  rhythms: [defaultRhythm()],
+  rhythmIdx: 0,
+  rhythmSysexSlot: 0,
+  config: defaultConfig(),
+  standaloneSlots: {},
+  sendProgress: null,
   sysexLog: '',
   midiMonitor: [],
   lockedParams: {},
@@ -80,10 +106,11 @@ export const S = {
 
 export const pat = () => S.patterns[S.patIdx];
 export const step = i => pat().steps[i] ?? pat().steps[0];
+export const rhythm = () => S.rhythms[S.rhythmIdx] ?? S.rhythms[0];
 
 export function saveState() {
   try {
-    const d = {bpm:S.bpm,patterns:S.patterns,patIdx:S.patIdx,chain:S.chain,patch:S.patch,stepLen:S.stepLen,octaveShift:S.octaveShift,pitchOffset:S.pitchOffset,zoomX:S.zoomX,zoomY:S.zoomY,rollH:S.rollH,swingAmt:S.swingAmt,songChain:S.songChain,theme:S.theme,globalTranspose:S.globalTranspose,splitEnabled:S.splitEnabled,splitNote:S.splitNote,splitCh1:S.splitCh1,splitCh2:S.splitCh2,layerEnabled:S.layerEnabled,layerChannels:S.layerChannels,library:S.library,sysexBank:S.sysexBank,collapsedSections:S.collapsedSections,velocityCurve:S.velocityCurve};
+    const d = {bpm:S.bpm,patterns:S.patterns,patIdx:S.patIdx,chain:S.chain,patch:S.patch,stepLen:S.stepLen,octaveShift:S.octaveShift,pitchOffset:S.pitchOffset,zoomX:S.zoomX,zoomY:S.zoomY,rollH:S.rollH,swingAmt:S.swingAmt,songChain:S.songChain,theme:S.theme,globalTranspose:S.globalTranspose,splitEnabled:S.splitEnabled,splitNote:S.splitNote,splitCh1:S.splitCh1,splitCh2:S.splitCh2,layerEnabled:S.layerEnabled,layerChannels:S.layerChannels,library:S.library,sysexBank:S.sysexBank,collapsedSections:S.collapsedSections,velocityCurve:S.velocityCurve,rhythms:S.rhythms,rhythmIdx:S.rhythmIdx,config:S.config};
     localStorage.setItem('micron_state', JSON.stringify(d));
     S.unsaved = false;
   } catch(_) {}
@@ -117,6 +144,9 @@ export function loadState() {
     if (d.sysexBank) S.sysexBank = d.sysexBank;
     if (d.collapsedSections) S.collapsedSections = d.collapsedSections;
     if (d.velocityCurve) S.velocityCurve = d.velocityCurve;
+    if (d.rhythms) S.rhythms = d.rhythms.map(r=>({...defaultRhythm(),...r,drums:(r.drums||[]).map(dr=>({...dr,steps:(dr.steps||[]).map(st=>({active:false,vel:100,...st}))}))}));
+    if (d.rhythmIdx!=null) S.rhythmIdx = d.rhythmIdx;
+    if (d.config) S.config = {...defaultConfig(),...d.config};
   } catch(_) {}
 }
 

@@ -127,6 +127,30 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'JetBra
 .overlay.show{display:flex}
 .overlay-box{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:20px;max-width:520px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 4px 24px #000a}
 .overlay-box h3{font-family:'Orbitron',sans-serif;color:var(--cyan);margin-bottom:12px;font-size:13px;letter-spacing:1px}
+.rhythm-selector{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.rhythm-selector select{flex:1;min-width:120px}
+.drum-row{margin-bottom:10px;border:1px solid var(--border);border-radius:6px;padding:6px}
+.drum-header{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.drum-header label{font-size:10px;color:var(--text2)}
+.drum-letter{font-weight:700;color:var(--accent);min-width:52px;font-size:11px}
+.drum-pgm{flex:1;min-width:80px;max-width:140px}
+.rhythm-grid{display:grid;grid-template-columns:repeat(16,1fr);gap:2px}
+.rhythm-step{height:28px;border-radius:3px;background:var(--cell);cursor:pointer;border:1px solid var(--border);position:relative;transition:background .1s}
+.rhythm-step.beat-start{border-left:2px solid var(--accent2)}
+.rhythm-step.active{background:var(--accent)}
+.rhythm-step.active::after{content:'';position:absolute;bottom:0;left:0;width:100%;height:var(--vel-h,60%);background:rgba(0,0,0,.3);border-radius:0 0 2px 2px}
+.config-param{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)}
+.config-param label{min-width:120px;font-size:11px;color:var(--text2)}
+.config-param input[type=range]{flex:1}
+.hint{font-size:10px;color:var(--text2);margin:4px 0 8px;line-height:1.4}
+.hint-inline{font-size:10px;color:var(--text2)}
+.standalone-list{display:flex;flex-direction:column;gap:4px}
+.standalone-slot{display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--cell);border-radius:5px;flex-wrap:wrap}
+.slot-name{font-weight:600;min-width:120px;font-size:11px}
+.slot-info{font-size:10px;color:var(--text2);min-width:80px}
+.send-progress{background:var(--cell);border-radius:5px;padding:8px;margin-bottom:8px;overflow:hidden;position:relative;height:28px;display:flex;align-items:center;gap:8px}
+.progress-bar{position:absolute;left:0;top:0;height:100%;background:var(--accent);opacity:.25;transition:width .3s}
+.ok{color:#00e676;font-weight:700}
 @media(max-width:767px){
   #bottom-nav{display:flex}
   #tabs-bar{display:none}

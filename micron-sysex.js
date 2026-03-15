@@ -1,5 +1,56 @@
 import { midiOut } from './micron-midi.js';
 
+const ALESIS_HDR = [0xF0, 0x00, 0x00, 0x0E, 0x22];
+const CONTENT_PATCH = 1, CONTENT_SETUP = 2, CONTENT_PATTERN = 3;
+
+export function requestPattern(slot) {
+  midiOut([...ALESIS_HDR, 0x41, CONTENT_PATTERN, 0x00, slot & 0x7F, 0xF7]);
+}
+export function requestAllPatterns() {
+  midiOut([...ALESIS_HDR, 0x41, CONTENT_PATTERN, 0x01, 0x00, 0xF7]);
+}
+export function requestRhythm(slot) {
+  midiOut([...ALESIS_HDR, 0x41, CONTENT_SETUP, 0x00, slot & 0x7F, 0xF7]);
+}
+export function requestAllRhythms() {
+  midiOut([...ALESIS_HDR, 0x41, CONTENT_SETUP, 0x01, 0x00, 0xF7]);
+}
+export function requestSetup(slot) {
+  midiOut([...ALESIS_HDR, 0x41, CONTENT_SETUP, 0x00, slot & 0x7F, 0xF7]);
+}
+export function sendAllSysEx() {
+  midiOut([0xF0, 0x00, 0x00, 0x0E, 0x22, 0x10, 0xF7]);
+}
+
+function buildMicronSysEx(content, bank, slot, dataBytes) {
+  const padded = [...dataBytes];
+  while (padded.length % 7 !== 0) padded.push(0);
+  const packed = pack7of8(padded);
+  return [...ALESIS_HDR, 0x42, content, bank & 0x0F, slot & 0x7F, ...packed, 0xF7];
+}
+
+export function sendPatternSysEx(pattern, slot) {
+  const nameBytes = Array.from({length:14}, (_,i) => pattern.name.charCodeAt(i)||0);
+  const data = [...nameBytes, 0, pattern.len & 0xFF, pattern.grid ? Math.round(1/pattern.grid) : 16, pattern.type==='arp'?1:0];
+  pattern.steps.slice(0, pattern.len).forEach(s => {
+    data.push(s.notes.length ? (s.notes[0].pitch & 0x7F) : 0xFF);
+    data.push(s.notes.length ? (s.notes[0].vel & 0x7F) : 0);
+    data.push(s.notes.length ? Math.min(127, Math.round(s.notes[0].len * 16)) : 0);
+  });
+  midiOut(buildMicronSysEx(CONTENT_PATTERN, 3, slot, data));
+}
+
+export function sendRhythmSysEx(rhythm, slot) {
+  const nameBytes = Array.from({length:14}, (_,i) => rhythm.name.charCodeAt(i)||0);
+  const data = [...nameBytes, 0, rhythm.len & 0xFF, rhythm.grid ? Math.round(1/rhythm.grid) : 16, rhythm.drums.length & 0xFF];
+  rhythm.drums.forEach(drum => {
+    const pname = Array.from({length:14}, (_,i) => (drum.program||'').charCodeAt(i)||0);
+    data.push(...pname, 0, drum.level & 0x7F, (drum.pan+50) & 0x7F);
+    drum.steps.slice(0,64).forEach(s => { data.push(s.active ? (s.vel & 0x7F) : 0); });
+  });
+  midiOut(buildMicronSysEx(CONTENT_SETUP, 3, slot, data));
+}
+
 export function pack7of8(bytes) {
   const out = [];
   for (let i = 0; i < bytes.length; i += 7) {
