@@ -65,7 +65,7 @@ function renderStepGrid() {
       class=${'step'+(s.notes.length?' has-notes':'')+(i===S.cursor?' cursor':'')+(S.playing&&i===S.playStep%p.len?' playing':'')}
       onclick=${()=>{S.cursor=i;schedRender();}}
       oncontextmenu=${e=>{e.preventDefault();const pi=s.notes.findIndex(n=>true);if(pi>=0)s.notes.splice(pi,1);schedRender();}}>
-      <span>${s.notes.length?NOTE_NAMES[s.notes[0].pitch%12]:'·'}</span>
+      <span>${s.notes.length?NOTE_NAMES[s.notes[0].pitch%12]+Math.floor(s.notes[0].pitch/12-1):'·'}</span>
       ${s.notes.length?html`<div class=vel-dot style=${'background:'+velColor(s.notes[0].vel)}></div>`:null}
     </div>`)}
   </div>`;
@@ -129,10 +129,12 @@ function renderToolbar() {
     <span class=brand>ALESIS <span>MICRON</span></span>
     <span class=sep></span>
     <button class=tbtn onclick=${()=>{S.bpm=Math.max(20,S.bpm-1);setClockSend(M.sendClock,S.bpm);schedRender();}}>−</button>
-    <input type=number class=bpm-in min=20 max=300 value=${S.bpm} oninput=${e=>{S.bpm=+e.target.value;setClockSend(M.sendClock,S.bpm);schedRender();}} />
+    <input type=number class=bpm-in min=20 max=300 value=${S.bpm}
+      oninput=${e=>{S.bpm=+e.target.value;setClockSend(M.sendClock,S.bpm);schedRender();}}
+      onwheel=${e=>{e.preventDefault();S.bpm=Math.max(20,Math.min(300,S.bpm+(e.deltaY<0?1:-1)));setClockSend(M.sendClock,S.bpm);schedRender();}} />
     <button class=tbtn onclick=${()=>{S.bpm=Math.min(300,S.bpm+1);setClockSend(M.sendClock,S.bpm);schedRender();}}>+</button>
     <button class=tbtn onclick=${doTap} title="Tap tempo">TAP</button>
-    <button class=${'tbtn'+(S.playing?' stop':' play')} onclick=${()=>togglePlay()}>${S.playing?'■ Stop':'▶ Play'}</button>
+    <button class=${'tbtn'+(S.playing?' stop':' play')} onclick=${()=>togglePlay()}>${S.playing?'■ Stop':'▶ Play'}</button> <kbd class=kbd-hint>Space</kbd>
     <span class=sep></span>
     ${_editingName
       ? html`<input class=patch-name-edit autofocus value=${_nameEditVal}

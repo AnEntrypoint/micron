@@ -49,9 +49,19 @@ function renderLocalLibrary() {
       <button class=${'cat-btn'+(S.libraryCat<0?' active':'')} onclick=${()=>{S.libraryCat=-1;render();}}>All</button>
       ${PATCH_CATEGORIES.map((c,i)=>html`<button class=${'cat-btn'+(S.libraryCat===i?' active':'')} onclick=${()=>{S.libraryCat=i;render();}}>${CAT_ICONS[i]} ${c}</button>`)}
     </div>
-    <div class=lib-grid>
+    <div class=lib-grid tabindex=0
+      onkeydown=${e=>{
+        const idx=S._libFocus??0;
+        if(e.key==='ArrowRight'){e.preventDefault();S._libFocus=Math.min(items.length-1,idx+1);render();}
+        else if(e.key==='ArrowLeft'){e.preventDefault();S._libFocus=Math.max(0,idx-1);render();}
+        else if(e.key==='ArrowDown'){e.preventDefault();S._libFocus=Math.min(items.length-1,idx+4);render();}
+        else if(e.key==='ArrowUp'){e.preventDefault();S._libFocus=Math.max(0,idx-4);render();}
+        else if(e.key==='Enter'&&items[idx]){loadPatch(items[idx]);}
+      }}
+      onfocus=${()=>{if(S._libFocus===undefined)S._libFocus=0;}}
+    >
       ${items.length===0?html`<div class=lib-empty>No patches. Save a patch or import from SysEx.</div>`:null}
-      ${items.map(p=>html`<div class=${'lib-card'+(S.abPatch[0]?.id===p.id?' ab-a':'')+(S.abPatch[1]?.id===p.id?' ab-b':'')}>
+      ${items.map((p,idx)=>html`<div class=${'lib-card'+(S.abPatch[0]?.id===p.id?' ab-a':'')+(S.abPatch[1]?.id===p.id?' ab-b':'')+(S._libFocus===idx?' lib-focus':'')} tabindex=-1>
         <div class=lc-name>${p.name}</div>
         <div class=lc-cat>${CAT_ICONS[p.category]||''} ${PATCH_CATEGORIES[p.category]||''}</div>
         <div class=lc-actions>
