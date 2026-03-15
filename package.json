@@ -1,0 +1,13 @@
+{
+  "name": "micron",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "pdf-parse": "^2.4.5"
+  }
+}
