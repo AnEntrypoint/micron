@@ -8,13 +8,15 @@ const STEP_LENS = [0.03125,0.0625,0.125,0.25,0.5,1,1.5,2,3,4];
 export function initRoll(canvas, velCanvas) {
   let drag = null;
   canvas.addEventListener('mousedown', e => startDrag(e, canvas, velCanvas));
-  canvas.addEventListener('mousemove', e => { if(drag) moveDrag(e, canvas); });
+  canvas.addEventListener('mousemove', e => { if(drag) moveDrag(e, canvas, velCanvas); });
   canvas.addEventListener('mouseup', () => { drag=null; });
   canvas.addEventListener('touchstart', e => { e.preventDefault(); startDrag(e.touches[0], canvas, velCanvas); }, {passive:false});
-  canvas.addEventListener('touchmove', e => { e.preventDefault(); if(drag) moveDrag(e.touches[0], canvas); }, {passive:false});
+  canvas.addEventListener('touchmove', e => { e.preventDefault(); if(drag) moveDrag(e.touches[0], canvas, velCanvas); }, {passive:false});
   canvas.addEventListener('touchend', () => { drag=null; });
-  velCanvas.addEventListener('mousedown', e => editVel(e, velCanvas));
-  velCanvas.addEventListener('mousemove', e => { if(e.buttons) editVel(e, velCanvas); });
+  if (velCanvas) {
+    velCanvas.addEventListener('mousedown', e => editVel(e, velCanvas));
+    velCanvas.addEventListener('mousemove', e => { if(e.buttons) editVel(e, velCanvas); });
+  }
 }
 
 function getNoteFromY(y, h) {
@@ -28,7 +30,7 @@ function getStepFromX(x, w) {
   return Math.floor((x - S.rollViewX) / stepW);
 }
 
-function startDrag(e, canvas) {
+function startDrag(e, canvas, velCanvas) {
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left, y = e.clientY - rect.top;
   const si = getStepFromX(x, canvas.width);
@@ -41,7 +43,7 @@ function startDrag(e, canvas) {
   S.unsaved = true;
   drawRoll(canvas, velCanvas);
 }
-function moveDrag(e, canvas) { startDrag(e, canvas); }
+function moveDrag(e, canvas, velCanvas) { startDrag(e, canvas, velCanvas); }
 
 function editVel(e, canvas) {
   const rect = canvas.getBoundingClientRect();

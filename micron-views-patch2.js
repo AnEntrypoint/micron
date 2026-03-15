@@ -1,6 +1,7 @@
 import { html } from './micron-ui-core.js';
 import { S } from './micron-state.js';
-import { sendParam, pushUndo } from './micron-patch.js';
+import { sendParam } from './micron-patch.js';
+import { pushUndo } from './micron-state.js';
 import { FILTER_TYPES,FX1_TYPES,FX2_TYPES,DRIVE_TYPES,PREFLT_SOURCES,F2_OFFSET_TYPES,filterHz,FX1_PARAM_NAMES,FX2_PARAM_NAMES,MOD_SRCS,MOD_DSTS,TRACKING_PRESETS } from './micron-data.js';
 
 export function sp(key, val) { pushUndo(S.patch); S.patch[key]=val; sendParam(key,val); }
