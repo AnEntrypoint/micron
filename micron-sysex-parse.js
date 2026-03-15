@@ -64,7 +64,7 @@ export function parsePatchDump(data) {
   if (data[1]!==0x00||data[2]!==0x00||data[3]!==0x0E||data[4]!==0x22) return null;
   const bank=data[6]&0x0F, slot=data[8]&0x7F;
   const unpacked=unpack7of8(Array.from(data).slice(9,data.length-1));
-  if (unpacked.length < 63+315) return null;
+  if (unpacked.length < 356) return null;
   const name=unpacked.slice(63,78).map(b=>b>=32&&b<127?String.fromCharCode(b):'').join('').trim()||'Untitled';
   return {name, bank, slot, params: extractParams(unpacked), raw: unpacked};
 }
