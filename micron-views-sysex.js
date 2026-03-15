@@ -185,7 +185,12 @@ export function handleSysEx(data) {
 }
 
 function loadBankPatch(p, i) {
-  S.patch = {...defaultPatch(), ...p.params};
+  let params = p.params;
+  if (p.raw) {
+    const parsed = parsePatchDump(new Uint8Array(p.raw));
+    if (parsed) params = parsed.params;
+  }
+  S.patch = {...defaultPatch(), ...params};
   sendAllParams(S.patch);
   S.sysexLog = `Loaded "${p.name}" (slot ${i+1})`;
   render();

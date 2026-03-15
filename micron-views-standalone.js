@@ -15,7 +15,7 @@ function ensureState() {
 
 function patchCount() {
   if (!S.sysexBanks) return 0;
-  return S.sysexBanks.reduce((n,b) => n + b.filter(Boolean).length, 0);
+  return S.sysexBanks.slice(0, 4).reduce((n,b) => n + b.filter(Boolean).length, 0);
 }
 
 export function renderStandaloneTab() {

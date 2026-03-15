@@ -12,7 +12,10 @@ const MIDI_SYNC = ['off','ext','gen'];
 function sendNRPN(msb, lsb, val) {
   import('./micron-midi.js').then(({midiOut}) => {
     const ch = (S.config.midiChannel - 1) & 0x0F;
-    midiOut([0xB0|ch, 99, msb, 0xB0|ch, 98, lsb, 0xB0|ch, 6, (val>>7)&0x7F, 0xB0|ch, 38, val&0x7F]);
+    midiOut([0xB0|ch, 99, msb]);
+    midiOut([0xB0|ch, 98, lsb]);
+    midiOut([0xB0|ch, 6, (val>>7)&0x7F]);
+    midiOut([0xB0|ch, 38, val&0x7F]);
   });
 }
 
