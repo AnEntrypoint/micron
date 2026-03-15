@@ -1,6 +1,5 @@
 import { html } from './micron-ui-core.js';
 import { S, saveState } from './micron-state.js';
-import { sendAllSysEx } from './micron-sysex.js';
 
 let render = ()=>{};
 export function setRender(fn) { render=fn; }
@@ -99,10 +98,10 @@ export function renderConfigTab() {
     </div>
 
     <div class=section>
-      <h4>SysEx Dump</h4>
-      <p class=hint>Send all stored data (patches, patterns, rhythms, setups) from the Micron to this editor.</p>
+      <h4>Sync from Synth</h4>
+      <p class=hint>Use the Standalone tab to request all patches, patterns and rhythms from the Micron.</p>
       <div class=btn-group>
-        <button class=tbtn onclick=${()=>{sendAllSysEx();S.sysexLog='Sent dump-all request';render();}}>Send All (Micron → Editor)</button>
+        <button class=tbtn onclick=${()=>{S.tab='standalone';render();}}>Go to Standalone Tab</button>
       </div>
     </div>
   </div>`;

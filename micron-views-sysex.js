@@ -1,6 +1,6 @@
 import { html } from './micron-ui-core.js';
 import { S, defaultRhythm, addToLibrary } from './micron-state.js';
-import { requestBank, parsePatchDump, parsePatternDump, parseRhythmDump, requestPattern, requestRhythm } from './micron-sysex.js';
+import { parsePatchDump, parsePatternDump, parseRhythmDump, requestPatch, requestPattern, requestRhythm, requestBankIndividual } from './micron-sysex.js';
 import { BANKS } from './micron-data.js';
 import { defaultPatch, sendAllParams } from './micron-patch.js';
 
@@ -72,6 +72,15 @@ export function renderSysExTab() {
   </div>`;
 }
 
+function doBankRequest(bankIdx) {
+  requestBankIndividual(S, bankIdx, s => {
+    if (s === 128) {
+      S.sysexLog = `Bank ${BANKS[bankIdx]} complete: ${(S.sysexBanks[bankIdx]||[]).filter(Boolean).length}/128 received`;
+    }
+    render();
+  });
+}
+
 function doRequest() {
   if (S.sysexContentType === 'patch') {
     const msg = [0xF0,0x00,0x00,0x0E,0x22,0x41,S.sysexSelectedBank&0x0F,0x00,S.sysexSelectedSlot&0x7F,0xF7];
@@ -89,9 +98,8 @@ function doRequest() {
 
 function doRequestAll() {
   if (S.sysexContentType === 'patch') {
-    const msg = [0xF0,0x00,0x00,0x0E,0x22,0x41,S.sysexSelectedBank&0x0F,0x01,0x00,0xF7];
-    import('./micron-midi.js').then(({midiOut}) => midiOut(msg));
-    S.sysexLog = `Requested full bank ${BANKS[S.sysexSelectedBank]}`;
+    doBankRequest(S.sysexSelectedBank);
+    S.sysexLog = `Requesting all patches in bank ${BANKS[S.sysexSelectedBank]} (individual)`;
   } else if (S.sysexContentType === 'pattern') {
     import('./micron-sysex.js').then(m=>m.requestAllPatterns());
     S.sysexLog = 'Requested all patterns';

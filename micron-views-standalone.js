@@ -1,6 +1,6 @@
 import { html } from './micron-ui-core.js';
 import { S, saveState } from './micron-state.js';
-import { sendPatternSysEx, sendRhythmSysEx, requestPattern, requestRhythm, requestAllPatterns, requestAllRhythms, requestBank } from './micron-sysex.js';
+import { sendPatternSysEx, sendRhythmSysEx, requestPattern, requestRhythm, requestAllPatterns, requestAllRhythms, requestBankIndividual } from './micron-sysex.js';
 import { BANKS } from './micron-data.js';
 
 let render = ()=>{};
@@ -90,7 +90,7 @@ export function renderStandaloneTab() {
       <h4>Patches by Bank</h4>
       ${BANKS.map((bname,bi)=>html`<div>
         <b>${bname}</b> — ${(S.sysexBanks[bi]||[]).filter(Boolean).length} / 128 received
-        <button class=tbtn onclick=${()=>requestBankIndividual(bi)}>Request ${bname}</button>
+        <button class=tbtn onclick=${()=>requestBankIndividual(S, bi, ()=>render())}>Request ${bname}</button>
       </div>`)}
       <div class=standalone-list style="margin-top:8px">
         ${(S.sysexBanks[S.sysexSelectedBank]||[]).map((p,i)=>p?html`<div class=standalone-slot>
@@ -100,31 +100,6 @@ export function renderStandaloneTab() {
       </div>
     </div>
   </div>`;
-}
-
-function waitForSlot(bankIdx, slot, timeoutMs) {
-  return new Promise(res => {
-    const start = Date.now();
-    const check = setInterval(() => {
-      if (S.sysexBanks?.[bankIdx]?.[slot]) { clearInterval(check); res(true); return; }
-      if (Date.now() - start > timeoutMs) { clearInterval(check); res(false); }
-    }, 50);
-  });
-}
-
-async function requestBankIndividual(bankIdx) {
-  const { requestPatch } = await import('./micron-sysex.js');
-  for (let s = 0; s < 128; s++) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      S._lastReqBank = bankIdx;
-      S._lastReqSlot = s;
-      requestPatch(bankIdx, s);
-      const ok = await waitForSlot(bankIdx, s, 1000);
-      if (ok) break;
-      if (attempt < 2) await new Promise(r => setTimeout(r, 200));
-    }
-    await new Promise(r => setTimeout(r, 50));
-  }
 }
 
 function getSlot(type, i) {
@@ -166,30 +141,20 @@ async function requestEverything() {
   const total = patchBanks * 128 + 2;
   S.syncProgress = { done: 0, total, label: 'Patches', startedAt: Date.now() };
   render();
-  const { requestPatch } = await import('./micron-sysex.js');
   for (let b = 0; b < patchBanks; b++) {
     S.syncProgress.label = `Bank ${BANKS[b]}`;
-    for (let s = 0; s < 128; s++) {
-      for (let attempt = 0; attempt < 3; attempt++) {
-        S._lastReqBank = b;
-        S._lastReqSlot = s;
-        requestPatch(b, s);
-        const ok = await waitForSlot(b, s, 1000);
-        if (ok) break;
-        if (attempt < 2) await new Promise(r => setTimeout(r, 200));
-      }
-      S.syncProgress.done++;
-      if (s % 8 === 0) render();
-      await new Promise(r => setTimeout(r, 50));
-    }
+    await requestBankIndividual(S, b, s => {
+      S.syncProgress.done = b * 128 + Math.min(s, 128);
+      render();
+    });
   }
   S.syncProgress.label = 'Patterns';
   requestAllPatterns();
-  S.syncProgress.done++;
+  S.syncProgress.done = patchBanks * 128 + 1;
   render();
   await new Promise(r => setTimeout(r, 200));
   S.syncProgress.label = 'Rhythms';
   requestAllRhythms();
-  S.syncProgress.done++;
+  S.syncProgress.done = total;
   render();
 }
