@@ -1,8 +1,8 @@
 import { createElement, applyDiff } from 'https://esm.sh/webjsx@0.0.73';
 import htm from 'https://esm.sh/htm@3.1.1';
 const html = htm.bind(createElement);
-import { S, loadState, saveState, pat, step } from './micron-state.js';
-import { M, initMIDI, midiOut, sendNoteOn, sendNoteOff, allNotesOff, logMidi, parseMidiMsg, setClockSend } from './micron-midi.js';
+import { S, loadState, saveState, pat } from './micron-state.js';
+import { M, initMIDI, allNotesOff, logMidi, setClockSend } from './micron-midi.js';
 import { handleSysEx as sysexHandler, renderSysExTab, setRender as sysexSetRender } from './micron-views-sysex.js';
 import { renderPatchTab } from './micron-views-patch.js';
 import { renderPatternsTab, setRender as patSetRender } from './micron-views-patterns.js';
@@ -12,10 +12,8 @@ import { renderRhythmTab, setRender as rhythmSetRender } from './micron-views-rh
 import { renderConfigTab, setRender as configSetRender } from './micron-views-config.js';
 import { renderStandaloneTab, setRender as standaloneSetRender } from './micron-views-standalone.js';
 import { drawRoll, schedulePlayback, initRoll } from './micron-sequencer.js';
-import { initGamepad, playNote, releaseNote } from './micron-perf.js';
-import { noteColor, isBlack, NOTE_NAMES, velColor, stepFracLabel } from './micron-data.js';
+import { NOTE_NAMES, velColor } from './micron-data.js';
 import { TABS, render as schedRender, setRenderFn } from './micron-ui-core.js';
-const BASE_KEYS = {q:60,w:62,e:64,r:65,t:67,y:69,u:71,i:72,o:74,p:76,a:48,s:50,d:52,f:53,g:55,h:57,j:59,'2':61,'3':63,'5':66,'6':68,'7':70};
 let rollCanvas, velCanvas, audioCtx;
 
 function handleMidiMsg(e) {
@@ -110,11 +108,6 @@ function renderToolbar() {
     <span>BPM</span>
     <input type=number class=bpm-in min=20 max=300 value=${S.bpm} oninput=${e=>{S.bpm=+e.target.value;setClockSend(M.sendClock,S.bpm);schedRender();}} />
     <button class=${'tbtn'+(S.playing?' stop':' play')} onclick=${()=>togglePlay()}>${S.playing?'■ Stop':'▶ Play'}</button>
-    <button class=${'tbtn'+(S.recording?' rec on':'rec')} onclick=${()=>{S.recording=!S.recording;schedRender();}}>⏺</button>
-    <span class=sep></span>
-    <button class=tbtn onclick=${()=>{S.octaveShift=Math.max(-3,S.octaveShift-1);schedRender();}}>Oct◀</button>
-    <span class=pos-display>${S.octaveShift>0?'+':''}${S.octaveShift}</span>
-    <button class=tbtn onclick=${()=>{S.octaveShift=Math.min(3,S.octaveShift+1);schedRender();}}>Oct▶</button>
     <span class=sep></span>
     <span class=${'midi-dot'+(M.rxFlash?' rx':M.output?' ok':'')}></span>
     <span class=midi-name>${M.output?.name?.slice(0,14)||'No MIDI'}</span>
@@ -159,16 +152,10 @@ setRenderFn(doRender);
 [sysexSetRender,patSetRender,midiSetRender,libSetRender,rhythmSetRender,configSetRender,standaloneSetRender].forEach(fn=>fn(schedRender));
 document.addEventListener('keydown', e => {
   if (e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA') return;
-  const note = BASE_KEYS[e.key];
-  if (note && !S.pressedKeys.has(note+S.octaveShift*12)) playNote(note+S.octaveShift*12, 100);
   if (e.key===' ') { e.preventDefault(); togglePlay(); }
   if (e.key==='ArrowRight') { S.cursor=Math.min(pat().len-1,S.cursor+1); schedRender(); }
   if (e.key==='ArrowLeft') { S.cursor=Math.max(0,S.cursor-1); schedRender(); }
   if (e.key==='z'&&(e.ctrlKey||e.metaKey)) { import('./micron-state.js').then(m=>{const u=m.popUndo();if(u){S.patch=u;import('./micron-patch.js').then(p=>p.sendAllParams(S.patch));schedRender();}}); }
-});
-document.addEventListener('keyup', e => {
-  const note = BASE_KEYS[e.key];
-  if (note) releaseNote(note+S.octaveShift*12);
 });
 
 let touchStartX = 0;
@@ -186,6 +173,5 @@ document.addEventListener('touchend', e => {
 loadState();
 const attachMidi = () => M.access?.inputs.forEach(i=>{ i.onmidimessage=handleMidiMsg; });
 initMIDI(()=>{ attachMidi(); schedRender(); }).then(ok=>{ if(ok) attachMidi(); schedRender(); });
-initGamepad(schedRender);
 setInterval(()=>{ if(S.unsaved) saveState(); }, 30000);
 doRender();

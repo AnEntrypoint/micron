@@ -1,9 +1,8 @@
 import { html } from './micron-ui-core.js';
-import { S } from './micron-state.js';
-import { requestPatch, requestBank, parsePatchDump, requestPattern, requestRhythm } from './micron-sysex.js';
-import { BANKS, PATCH_CATEGORIES } from './micron-data.js';
+import { S, defaultRhythm, addToLibrary } from './micron-state.js';
+import { requestBank, parsePatchDump, parsePatternDump, parseRhythmDump, requestPattern, requestRhythm } from './micron-sysex.js';
+import { BANKS } from './micron-data.js';
 import { defaultPatch, sendAllParams } from './micron-patch.js';
-import { addToLibrary } from './micron-state.js';
 
 const CONTENT_TYPES = ['patch','rhythm','pattern'];
 if (!S.sysexContentType) S.sysexContentType = 'patch';
@@ -52,10 +51,16 @@ export function renderSysExTab() {
       </div>
     </div>
     <div class=section>
-      <h4>Patch Bank</h4>
+      <h4>Patch Banks</h4>
+      <div class=pr>
+        <label>View Bank</label>
+        <select onchange=${e=>{S.sysexSelectedBank=+e.target.value;render();}}>
+          ${BANKS.map((b,i)=>html`<option value=${i} selected=${S.sysexSelectedBank===i}>${b} (${(S.sysexBanks&&S.sysexBanks[i]||[]).filter(Boolean).length}/128)</option>`)}
+        </select>
+      </div>
       <input placeholder="Search patches..." value=${S.sysexBankFilter} oninput=${e=>{S.sysexBankFilter=e.target.value;render();}} class=search-in />
       <div class=bank-grid>
-        ${S.sysexBank.map((p,i)=>{
+        ${(S.sysexBanks&&S.sysexBanks[S.sysexSelectedBank]||S.sysexBank).map((p,i)=>{
           if (S.sysexBankFilter && p && !p.name.toLowerCase().includes(S.sysexBankFilter.toLowerCase())) return null;
           return html`<div class=${'bank-cell'+(p?' loaded':'')} title=${p?p.name:''} onclick=${()=>{if(p){loadBankPatch(p,i);}}}>
             <span class=bc-num>${i+1}</span>
@@ -99,23 +104,49 @@ function doRequestAll() {
 
 export function handleSysEx(data) {
   const hex = Array.from(data).map(b=>b.toString(16).padStart(2,'0')).join(' ');
-  S.sysexLog = `Rx: [${data.length}b] ${hex.slice(0,120)}...`;
+  S.sysexLog = `Rx: [${data.length}b] ${hex.slice(0,120)}`;
   if (!(data[1]===0x00&&data[2]===0x00&&data[3]===0x0E&&data[4]===0x22)) { render(); return; }
   const content = data[5];
   if (content === 1) {
     const parsed = parsePatchDump(data);
     if (parsed) {
-      const slot = parsed.slot;
-      if (slot>=0&&slot<128) S.sysexBank[slot] = {name:parsed.name, params:parsed.params};
-      S.patch = {...defaultPatch(), ...parsed.params};
+      const { bank, slot, name, params } = parsed;
+      if (!S.sysexBanks) S.sysexBanks = [Array(128).fill(null),Array(128).fill(null),Array(128).fill(null),Array(128).fill(null)];
+      if (bank>=0&&bank<4&&slot>=0&&slot<128) S.sysexBanks[bank][slot] = {name, params};
+      if (bank===S.sysexSelectedBank) S.sysexBank[slot] = {name, params};
+      S.patch = {...defaultPatch(), ...params};
       sendAllParams(S.patch);
-      S.sysexLog = `Rx patch: "${parsed.name}" slot ${slot}`;
-      addToLibrary(parsed.name, parsed.params, parsed.params.category||0);
+      S.sysexLog = `Rx patch: "${name}" bank ${BANKS[bank]||bank} slot ${slot}`;
+      addToLibrary(name, params, params.category||0);
     }
   } else if (content === 3) {
-    S.sysexLog = `Rx pattern data [${data.length}b]`;
+    const parsed = parsePatternDump(data);
+    if (parsed) {
+      const { slot, name, len, grid, type, steps } = parsed;
+      if (slot >= 0 && slot < S.patterns.length) {
+        S.patterns[slot] = { name, len, grid, type, steps };
+      } else if (slot >= S.patterns.length) {
+        while (S.patterns.length <= slot) S.patterns.push({name:`Pat ${S.patterns.length+1}`,len:16,grid:0.0625,type:'seq',steps:Array.from({length:64},()=>({notes:[],len:0.0625,prob:100}))});
+        S.patterns[slot] = { name, len, grid, type, steps };
+      }
+      S.sysexLog = `Rx pattern: "${name}" slot ${slot}`;
+    } else {
+      S.sysexLog = `Rx pattern data [${data.length}b] (unrecognized format)`;
+    }
   } else if (content === 2) {
-    S.sysexLog = `Rx rhythm/setup data [${data.length}b]`;
+    const parsed = parseRhythmDump(data);
+    if (parsed) {
+      const { slot, name, len, grid, drums } = parsed;
+      if (slot >= 0 && slot < S.rhythms.length) {
+        S.rhythms[slot] = { name, len, grid, drums };
+      } else if (slot >= S.rhythms.length) {
+        while (S.rhythms.length <= slot) S.rhythms.push(defaultRhythm());
+        S.rhythms[slot] = { name, len, grid, drums };
+      }
+      S.sysexLog = `Rx rhythm: "${name}" slot ${slot}`;
+    } else {
+      S.sysexLog = `Rx setup/rhythm data [${data.length}b]`;
+    }
   }
   render();
 }
@@ -128,8 +159,7 @@ function loadBankPatch(p, i) {
 }
 
 function importSyx() {
-  const input = document.createElement('input');
-  input.type='file'; input.accept='.syx,.bin,.mid';
+  const input = Object.assign(document.createElement('input'), {type:'file', accept:'.syx,.bin,.mid'});
   input.onchange = e => {
     const file = e.target.files[0]; if(!file) return;
     const reader = new FileReader();
@@ -137,21 +167,13 @@ function importSyx() {
       const data = new Uint8Array(ev.target.result);
       let i=0, count=0;
       while(i<data.length) {
-        if(data[i]===0xF0) {
-          let end=data.indexOf(0xF7,i);
-          if(end<0) break;
-          const msg=data.slice(i,end+1);
-          const parsed=parsePatchDump(msg);
-          if(parsed) {
-            const slot=parsed.slot;
-            if(slot>=0&&slot<128) S.sysexBank[slot]={name:parsed.name,params:parsed.params};
-            count++;
-          }
-          i=end+1;
-        } else i++;
+        if(data[i]!==0xF0) { i++; continue; }
+        const end=data.indexOf(0xF7,i); if(end<0) break;
+        const parsed=parsePatchDump(data.slice(i,end+1));
+        if(parsed&&parsed.slot>=0&&parsed.slot<128) { S.sysexBank[parsed.slot]={name:parsed.name,params:parsed.params}; count++; }
+        i=end+1;
       }
-      S.sysexLog=`Imported ${count} patches from file`;
-      render();
+      S.sysexLog=`Imported ${count} patches from file`; render();
     };
     reader.readAsArrayBuffer(file);
   };
@@ -159,16 +181,11 @@ function importSyx() {
 }
 
 function exportSyx() {
-  const patches = S.sysexBank.filter(Boolean);
+  const bank = S.sysexBanks&&S.sysexBanks[S.sysexSelectedBank] || S.sysexBank;
+  const patches = bank.filter(Boolean);
   if(!patches.length) { alert('No patches in bank to export'); return; }
-  const bytes = [];
-  patches.forEach(p => {
-    bytes.push(0xF0,0x00,0x00,0x0E,0x22);
-    bytes.push(...Array(373).fill(0));
-    bytes.push(0xF7);
-  });
-  const blob = new Blob([new Uint8Array(bytes)], {type:'application/octet-stream'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href=url; a.download='micron-bank.syx'; a.click();
+  const bytes = patches.flatMap(() => [0xF0,0x00,0x00,0x0E,0x22,...Array(373).fill(0),0xF7]);
+  const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], {type:'application/octet-stream'}));
+  Object.assign(document.createElement('a'), {href:url, download:'micron-bank.syx'}).click();
   URL.revokeObjectURL(url);
 }

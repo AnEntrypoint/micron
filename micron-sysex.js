@@ -15,9 +15,6 @@ export function requestRhythm(slot) {
 export function requestAllRhythms() {
   midiOut([...ALESIS_HDR, 0x41, CONTENT_SETUP, 0x01, 0x00, 0xF7]);
 }
-export function requestSetup(slot) {
-  midiOut([...ALESIS_HDR, 0x41, CONTENT_SETUP, 0x00, slot & 0x7F, 0xF7]);
-}
 export function sendAllSysEx() {
   midiOut([0xF0, 0x00, 0x00, 0x0E, 0x22, 0x10, 0xF7]);
 }
@@ -153,6 +150,65 @@ export function extractParams(p) {
   };
 }
 
-export function buildSysExRequest(bank, slot) {
-  return [0xF0, 0x00, 0x00, 0x0E, 0x22, 0x41, bank & 0x0F, 0x00, slot & 0x7F, 0xF7];
+function isAlesisDump(data, contentByte) {
+  return data[1]===0x00&&data[2]===0x00&&data[3]===0x0E&&data[4]===0x22&&data[5]===contentByte;
+}
+function decodeStr(bytes) {
+  return bytes.map(b=>b>=32&&b<127?String.fromCharCode(b):'').join('').trim();
+}
+function unpackDump(data) {
+  return unpack7of8(Array.from(data).slice(9, data.length-1));
+}
+function parseGridLen(unpacked) {
+  const len = unpacked[15] || 16;
+  const div = unpacked[16] || 16;
+  return { len, grid: div>0 ? 1/div : 0.0625 };
+}
+
+export function parsePatternDump(data) {
+  if (!isAlesisDump(data, CONTENT_PATTERN)) return null;
+  const slot = data[8] & 0x7F, bank = data[6] & 0x0F;
+  const unpacked = unpackDump(data);
+  if (unpacked.length < 18) return null;
+  const name = decodeStr(unpacked.slice(0,14)) || `Pat ${slot+1}`;
+  const { len, grid } = parseGridLen(unpacked);
+  const type = unpacked[17] ? 'arp' : 'seq';
+  const steps = [];
+  let off = 18;
+  for (let i=0; i<len&&off+2<unpacked.length; i++,off+=3) {
+    const pitch=unpacked[off], vel=unpacked[off+1], lv=unpacked[off+2];
+    steps.push(pitch&&pitch!==0xFF ? {notes:[{pitch:pitch&0x7F,vel:vel&0x7F,len:lv/16}],len:grid,prob:100} : {notes:[],len:grid,prob:100});
+  }
+  while (steps.length < 64) steps.push({notes:[],len:grid,prob:100});
+  return { name, bank, slot, len, grid, type, steps };
+}
+
+export function parseRhythmDump(data) {
+  if (!isAlesisDump(data, CONTENT_SETUP)) return null;
+  const slot = data[8] & 0x7F, bank = data[6] & 0x0F;
+  const unpacked = unpackDump(data);
+  if (unpacked.length < 19) return null;
+  const name = decodeStr(unpacked.slice(0,14)) || `Rhythm ${slot+1}`;
+  const { len, grid } = parseGridLen(unpacked);
+  const numDrums = unpacked[18] || 0;
+  const drums = [];
+  let off = 19;
+  for (let d=0; d<numDrums&&off+16<unpacked.length; d++) {
+    const program = decodeStr(unpacked.slice(off,off+14)) || 'Drum';
+    off += 15;
+    const level = unpacked[off++]&0x7F, pan = (unpacked[off++]&0x7F)-50;
+    const steps = [];
+    for (let s=0; s<64&&off<unpacked.length; s++,off++) steps.push({active:unpacked[off]>0, vel:unpacked[off]||100});
+    while (steps.length<64) steps.push({active:false,vel:100});
+    drums.push({program, level, pan, steps});
+  }
+  if (!drums.length) return null;
+  return { name, bank, slot, len, grid, drums };
+}
+
+export function parseSetupDump(data) {
+  if (!isAlesisDump(data, CONTENT_SETUP)) return null;
+  const unpacked = unpackDump(data);
+  if (unpacked.length < 10) return null;
+  return { contrast: unpacked[0]&0x0F, tuning: unpacked[1], transpose: unpacked[2], midiChannel: (unpacked[3]&0x0F)+1, localControl: (unpacked[4]&1)?'on':'off' };
 }

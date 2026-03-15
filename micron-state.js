@@ -57,14 +57,6 @@ export const S = {
   abSlot: 0,
   morphT: 0,
   midiLearnTarget: null,
-  arpActive: false,
-  arpHeld: [],
-  arpStep: 0,
-  arpVizStep: -1,
-  chordMode: false,
-  chordIntervals: [],
-  scale: null,
-  scaleRoot: 0,
   swingAmt: 0,
   backups: [],
   theme: 'dark',
@@ -83,10 +75,12 @@ export const S = {
   library: [],
   libraryFilter: '',
   libraryCat: -1,
+  sysexBanks: [Array(128).fill(null), Array(128).fill(null), Array(128).fill(null), Array(128).fill(null)],
   sysexBank: Array(128).fill(null),
   sysexBankFilter: '',
   sysexSelectedBank: 3,
   sysexSelectedSlot: 0,
+  syncProgress: null,
   rhythms: [defaultRhythm()],
   rhythmIdx: 0,
   rhythmSysexSlot: 0,
@@ -101,7 +95,6 @@ export const S = {
   rollResizerDrag: false,
   paramSearch: '',
   collapsedSections: {},
-  gamepadActive: false,
 };
 
 export const pat = () => S.patterns[S.patIdx];
@@ -110,7 +103,7 @@ export const rhythm = () => S.rhythms[S.rhythmIdx] ?? S.rhythms[0];
 
 export function saveState() {
   try {
-    const d = {bpm:S.bpm,patterns:S.patterns,patIdx:S.patIdx,chain:S.chain,patch:S.patch,stepLen:S.stepLen,octaveShift:S.octaveShift,pitchOffset:S.pitchOffset,zoomX:S.zoomX,zoomY:S.zoomY,rollH:S.rollH,swingAmt:S.swingAmt,songChain:S.songChain,theme:S.theme,globalTranspose:S.globalTranspose,splitEnabled:S.splitEnabled,splitNote:S.splitNote,splitCh1:S.splitCh1,splitCh2:S.splitCh2,layerEnabled:S.layerEnabled,layerChannels:S.layerChannels,library:S.library,sysexBank:S.sysexBank,collapsedSections:S.collapsedSections,velocityCurve:S.velocityCurve,rhythms:S.rhythms,rhythmIdx:S.rhythmIdx,config:S.config};
+    const d = {bpm:S.bpm,patterns:S.patterns,patIdx:S.patIdx,chain:S.chain,patch:S.patch,stepLen:S.stepLen,pitchOffset:S.pitchOffset,zoomX:S.zoomX,zoomY:S.zoomY,rollH:S.rollH,swingAmt:S.swingAmt,songChain:S.songChain,theme:S.theme,globalTranspose:S.globalTranspose,splitEnabled:S.splitEnabled,splitNote:S.splitNote,splitCh1:S.splitCh1,splitCh2:S.splitCh2,layerEnabled:S.layerEnabled,layerChannels:S.layerChannels,library:S.library,sysexBank:S.sysexBank,sysexBanks:S.sysexBanks,collapsedSections:S.collapsedSections,velocityCurve:S.velocityCurve,rhythms:S.rhythms,rhythmIdx:S.rhythmIdx,config:S.config};
     localStorage.setItem('micron_state', JSON.stringify(d));
     S.unsaved = false;
   } catch(_) {}
@@ -125,7 +118,6 @@ export function loadState() {
     if (d.chain) S.chain = d.chain;
     if (d.patch) S.patch = {...defaultPatch(),...d.patch};
     if (d.stepLen) S.stepLen = d.stepLen;
-    if (d.octaveShift!=null) S.octaveShift = d.octaveShift;
     if (d.pitchOffset!=null) S.pitchOffset = d.pitchOffset;
     if (d.zoomX) S.zoomX = d.zoomX;
     if (d.zoomY) S.zoomY = d.zoomY;
@@ -142,6 +134,7 @@ export function loadState() {
     if (d.layerChannels) S.layerChannels = d.layerChannels;
     if (d.library) S.library = d.library;
     if (d.sysexBank) S.sysexBank = d.sysexBank;
+    if (d.sysexBanks) S.sysexBanks = d.sysexBanks.map(b => Array.isArray(b) ? b : Array(128).fill(null));
     if (d.collapsedSections) S.collapsedSections = d.collapsedSections;
     if (d.velocityCurve) S.velocityCurve = d.velocityCurve;
     if (d.rhythms) S.rhythms = d.rhythms.map(r=>({...defaultRhythm(),...r,drums:(r.drums||[]).map(dr=>({...dr,steps:(dr.steps||[]).map(st=>({active:false,vel:100,...st}))}))}));

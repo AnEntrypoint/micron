@@ -1,6 +1,7 @@
 import { html } from './micron-ui-core.js';
 import { S, saveState } from './micron-state.js';
 import { sendPatternSysEx, sendRhythmSysEx, requestPattern, requestRhythm, requestAllPatterns, requestAllRhythms, requestBank } from './micron-sysex.js';
+import { BANKS } from './micron-data.js';
 
 let render = ()=>{};
 export function setRender(fn) { render=fn; }
@@ -8,14 +9,43 @@ export function setRender(fn) { render=fn; }
 function ensureState() {
   if (!S.standaloneSlots) S.standaloneSlots = {};
   if (S.sendProgress === undefined) S.sendProgress = null;
+  if (!S.syncProgress) S.syncProgress = null;
+  if (!S.sysexBanks) S.sysexBanks = [Array(128).fill(null),Array(128).fill(null),Array(128).fill(null),Array(128).fill(null)];
+}
+
+function patchCount() {
+  if (!S.sysexBanks) return 0;
+  return S.sysexBanks.reduce((n,b) => n + b.filter(Boolean).length, 0);
 }
 
 export function renderStandaloneTab() {
   ensureState();
+  const syncing = S.syncProgress && S.syncProgress.done < S.syncProgress.total;
   return html`<div>
     <div class=section>
-      <h4>Standalone Programming Workflow</h4>
-      <p class=hint>Assign slot numbers, then send everything to the Micron in one operation. The Micron stores programs, patterns, and rhythms in numbered slots. Press Send Everything to upload all items.</p>
+      <h4>Sync from Synth</h4>
+      <p class=hint>Request all patches (4 banks × 128 = 512), all patterns (128), all rhythms, and setup from the Micron. Data received via SysEx will populate the editor automatically.</p>
+      ${S.syncProgress ? html`<div class=send-progress>
+        <div class=progress-bar style=${'width:'+Math.round(S.syncProgress.done/S.syncProgress.total*100)+'%'}></div>
+        <span>${S.syncProgress.label||''} ${S.syncProgress.done} / ${S.syncProgress.total}</span>
+        ${S.syncProgress.done >= S.syncProgress.total ? html`<span class=ok> Requests sent — waiting for synth responses</span>` : null}
+      </div>` : null}
+      <div class=sync-summary>
+        <span>Patches received: <b>${patchCount()}</b> / 512</span>
+        <span class=sep></span>
+        <span>Patterns: <b>${S.patterns.filter(p=>p.steps.some(s=>s.notes.length)).length}</b> non-empty</span>
+        <span class=sep></span>
+        <span>Rhythms: <b>${S.rhythms.length}</b></span>
+      </div>
+      <div class=btn-group>
+        <button class=${'tbtn'+(syncing?' disabled':'')} onclick=${()=>requestEverything()}>Request All from Synth</button>
+        <button class=tbtn onclick=${()=>{S.syncProgress=null;render();}}>Clear Status</button>
+      </div>
+    </div>
+
+    <div class=section>
+      <h4>Send to Synth</h4>
+      <p class=hint>Upload all local patterns and rhythms to the Micron.</p>
       ${S.sendProgress !== null ? html`<div class=send-progress>
         <div class=progress-bar style=${'width:'+Math.round(S.sendProgress.done/S.sendProgress.total*100)+'%'}></div>
         <span>${S.sendProgress.done} / ${S.sendProgress.total} sent</span>
@@ -23,7 +53,6 @@ export function renderStandaloneTab() {
       </div>` : null}
       <div class=btn-group>
         <button class=${'tbtn'+(S.sendProgress&&S.sendProgress.done<S.sendProgress.total?' disabled':'')} onclick=${()=>sendEverything()}>Send Everything to Micron</button>
-        <button class=tbtn onclick=${()=>requestEverything()}>Request All from Micron</button>
         <button class=tbtn onclick=${()=>{S.sendProgress=null;render();}}>Clear Status</button>
       </div>
     </div>
@@ -57,16 +86,17 @@ export function renderStandaloneTab() {
     </div>
 
     <div class=section>
-      <h4>Patches (SysEx Bank)</h4>
-      <div class=standalone-list>
-        ${S.sysexBank.map((p,i)=>p?html`<div class=standalone-slot>
+      <h4>Patches by Bank</h4>
+      ${BANKS.map((bname,bi)=>html`<div>
+        <b>${bname}</b> — ${(S.sysexBanks[bi]||[]).filter(Boolean).length} / 128 received
+        <button class=tbtn onclick=${()=>requestBank(bi)}>Request ${bname}</button>
+      </div>`)}
+      <div class=standalone-list style="margin-top:8px">
+        ${(S.sysexBanks[S.sysexSelectedBank]||[]).map((p,i)=>p?html`<div class=standalone-slot>
           <span class=slot-name>${p.name}</span>
-          <span class=slot-info>Slot ${i}</span>
-          <label>Send to</label>
-          <input type=number min=0 max=127 value=${getSlot('patch',i)||i} oninput=${e=>setSlot('patch',i,+e.target.value)} class=num-in style="width:52px" />
+          <span class=slot-info>${BANKS[S.sysexSelectedBank]} slot ${i}</span>
         </div>`:null)}
       </div>
-      <button class=tbtn onclick=${()=>requestBank(3)}>Request User Bank from Micron</button>
     </div>
   </div>`;
 }
@@ -105,8 +135,22 @@ async function sendEverything() {
   }
 }
 
-function requestEverything() {
+async function requestEverything() {
+  const bankRequests = BANKS.length;
+  const total = bankRequests + 2;
+  S.syncProgress = {done:0, total, label:'Requesting'};
+  render();
+  for (let b = 0; b < BANKS.length; b++) {
+    requestBank(b);
+    S.syncProgress.done++;
+    render();
+    await new Promise(res => setTimeout(res, 150));
+  }
   requestAllPatterns();
-  setTimeout(() => requestAllRhythms(), 200);
-  setTimeout(() => requestBank(3), 400);
+  S.syncProgress.done++;
+  render();
+  await new Promise(res => setTimeout(res, 150));
+  requestAllRhythms();
+  S.syncProgress.done++;
+  render();
 }
