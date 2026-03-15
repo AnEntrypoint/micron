@@ -19,7 +19,14 @@ export async function initMIDI(onStateChange) {
 function refreshDevices() {
   M.outputs = [...M.access.outputs.values()];
   M.inputs = [...M.access.inputs.values()];
-  if (!M.output && M.outputs.length) M.output = M.outputs[0];
+  const savedOut = localStorage.getItem('micron_output');
+  const savedIn = localStorage.getItem('micron_input');
+  if (savedOut) M.output = M.outputs.find(o=>o.name===savedOut) || M.output || M.outputs[0];
+  else if (!M.output && M.outputs.length) M.output = M.outputs[0];
+  if (savedIn) {
+    const inp = M.inputs.find(i=>i.name===savedIn);
+    if (inp && inp !== M.input) { inp.onmidimessage = window._midiHandler; M.input = inp; }
+  }
 }
 
 export function setInput(id, handler) {

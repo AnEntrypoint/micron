@@ -13,14 +13,14 @@ export function renderMIDITab() {
         <h4>Devices</h4>
         <div class=pr>
           <label>Output</label>
-          <select onchange=${e=>{M.output=M.outputs.find(o=>o.id===e.target.value)||M.output;}}>
+          <select onchange=${e=>{const o=M.outputs.find(o=>o.id===e.target.value);if(o){M.output=o;localStorage.setItem('micron_output',o.name);}render();}}>
             <option value="">${M.outputs.length?'Select...':'No MIDI outputs'}</option>
             ${M.outputs.map(o=>html`<option value=${o.id} selected=${M.output?.id===o.id}>${o.name}</option>`)}
           </select>
         </div>
         <div class=pr>
           <label>Input</label>
-          <select onchange=${e=>{ const inp=M.inputs.find(i=>i.id===e.target.value); if(inp){inp.onmidimessage=window._midiHandler; M.input=inp;} }}>
+          <select onchange=${e=>{ const inp=M.inputs.find(i=>i.id===e.target.value); if(inp){inp.onmidimessage=window._midiHandler; M.input=inp; localStorage.setItem('micron_input',inp.name);} render(); }}>
             <option value="">${M.inputs.length?'Select...':'No MIDI inputs'}</option>
             ${M.inputs.map(i=>html`<option value=${i.id} selected=${M.input?.id===i.id}>${i.name}</option>`)}
           </select>
