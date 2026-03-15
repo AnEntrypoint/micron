@@ -102,13 +102,28 @@ export function renderStandaloneTab() {
   </div>`;
 }
 
+function waitForSlot(bankIdx, slot, timeoutMs) {
+  return new Promise(res => {
+    const start = Date.now();
+    const check = setInterval(() => {
+      if (S.sysexBanks?.[bankIdx]?.[slot]) { clearInterval(check); res(true); return; }
+      if (Date.now() - start > timeoutMs) { clearInterval(check); res(false); }
+    }, 50);
+  });
+}
+
 async function requestBankIndividual(bankIdx) {
   const { requestPatch } = await import('./micron-sysex.js');
   for (let s = 0; s < 128; s++) {
-    requestPatch(bankIdx, s);
-    S._lastReqBank = bankIdx;
-    S._lastReqSlot = s;
-    await new Promise(res => setTimeout(res, 120));
+    for (let attempt = 0; attempt < 3; attempt++) {
+      S._lastReqBank = bankIdx;
+      S._lastReqSlot = s;
+      requestPatch(bankIdx, s);
+      const ok = await waitForSlot(bankIdx, s, 1000);
+      if (ok) break;
+      if (attempt < 2) await new Promise(r => setTimeout(r, 200));
+    }
+    await new Promise(r => setTimeout(r, 50));
   }
 }
 
@@ -147,28 +162,32 @@ async function sendEverything() {
 }
 
 async function requestEverything() {
-  const total = BANKS.length * 128 + 2;
-  S.syncProgress = {done:0, total, label:'Patches', startedAt: Date.now()};
-  S._reqQueue = [];
-  for (let b = 0; b < BANKS.length; b++) {
-    for (let s = 0; s < 128; s++) S._reqQueue.push({bank: b, slot: s});
-  }
+  const patchBanks = BANKS.length - 1;
+  const total = patchBanks * 128 + 2;
+  S.syncProgress = { done: 0, total, label: 'Patches', startedAt: Date.now() };
   render();
-  for (const {bank, slot} of S._reqQueue) {
-    import('./micron-sysex.js').then(m => {
-      m.requestPatch(bank, slot);
-      S._lastReqBank = bank;
-      S._lastReqSlot = slot;
-    });
-    S.syncProgress.done++;
-    if (S.syncProgress.done % 10 === 0) render();
-    await new Promise(res => setTimeout(res, 120));
+  const { requestPatch } = await import('./micron-sysex.js');
+  for (let b = 0; b < patchBanks; b++) {
+    S.syncProgress.label = `Bank ${BANKS[b]}`;
+    for (let s = 0; s < 128; s++) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        S._lastReqBank = b;
+        S._lastReqSlot = s;
+        requestPatch(b, s);
+        const ok = await waitForSlot(b, s, 1000);
+        if (ok) break;
+        if (attempt < 2) await new Promise(r => setTimeout(r, 200));
+      }
+      S.syncProgress.done++;
+      if (s % 8 === 0) render();
+      await new Promise(r => setTimeout(r, 50));
+    }
   }
   S.syncProgress.label = 'Patterns';
   requestAllPatterns();
   S.syncProgress.done++;
   render();
-  await new Promise(res => setTimeout(res, 200));
+  await new Promise(r => setTimeout(r, 200));
   S.syncProgress.label = 'Rhythms';
   requestAllRhythms();
   S.syncProgress.done++;

@@ -149,6 +149,10 @@ function doRender() {
 }
 
 window._micronRender = () => schedRender();
+window._S = S;
+window._M = M;
+window._handleSysEx = sysexHandler;
+window._requestPatch = (bank, slot) => import('./micron-sysex.js').then(m => m.requestPatch(bank, slot));
 setRenderFn(doRender);
 [sysexSetRender,patSetRender,midiSetRender,libSetRender,rhythmSetRender,configSetRender,standaloneSetRender].forEach(fn=>fn(schedRender));
 document.addEventListener('keydown', e => {

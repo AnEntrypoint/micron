@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Micron Chain Test</title>
+<style>
+body { font-family: monospace; background: #1a1a1a; color: #ccc; margin: 0; padding: 16px; }
+h2 { color: #fff; margin: 0 0 12px; }
+.stats { display: flex; gap: 20px; background: #222; padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 14px; }
+.stat { display: flex; flex-direction: column; align-items: center; }
+.stat-val { font-size: 24px; font-weight: bold; color: #4af; }
+.stat-label { font-size: 11px; color: #888; }
+.sent .stat-val { color: #fa4; }
+.received .stat-val { color: #4f4; }
+.pending .stat-val { color: #ff4; }
+.failed .stat-val { color: #f44; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+button { background: #333; color: #fff; border: 1px solid #555; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 13px; }
+button:hover { background: #444; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.active { background: #226; border-color: #4af; color: #4af; }
+.log { background: #111; border: 1px solid #333; border-radius: 4px; height: 400px; overflow-y: auto; padding: 8px; font-size: 12px; line-height: 1.5; }
+.log-entry { border-bottom: 1px solid #1e1e1e; padding: 2px 0; }
+.ts { color: #555; margin-right: 6px; }
+.ok { color: #4f4; }
+.err { color: #f44; }
+.send { color: #fa4; }
+.info { color: #4af; }
+.midi-status { margin-bottom: 12px; padding: 8px 12px; border-radius: 4px; font-size: 13px; }
+.midi-ok { background: #1a3a1a; border: 1px solid #4f4; color: #4f4; }
+.midi-err { background: #3a1a1a; border: 1px solid #f44; color: #f44; }
+.midi-wait { background: #2a2a1a; border: 1px solid #fa4; color: #fa4; }
+</style>
+</head>
+<body>
+<h2>Micron Chain Test — Patch Request Pacing</h2>
+
+<div id="midi-status" class="midi-status midi-wait">Connecting to MIDI...</div>
+
+<div class="stats">
+  <div class="stat sent"><span class="stat-val" id="stat-sent">0</span><span class="stat-label">SENT</span></div>
+  <div class="stat received"><span class="stat-val" id="stat-received">0</span><span class="stat-label">RECEIVED</span></div>
+  <div class="stat pending"><span class="stat-val" id="stat-pending">0</span><span class="stat-label">PENDING</span></div>
+  <div class="stat failed"><span class="stat-val" id="stat-failed">0</span><span class="stat-label">FAILED</span></div>
+</div>
+
+<div class="btns">
+  <button id="btn-single" onclick="testSingle()">Test Single (Yellow slot 0)</button>
+  <button id="btn-3" onclick="test3x1s()">Test 3 requests 1sec apart</button>
+  <button id="btn-10" onclick="test10x500ms()">Test 10 requests 500ms apart</button>
+  <button id="btn-auto" onclick="autoBackupYellow()">Auto Backup Yellow Bank</button>
+  <button onclick="clearLog()">Clear Log</button>
+</div>
+
+<div id="log" class="log"></div>
+
+<script>
+const ALESIS_HDR = [0xF0, 0x00, 0x00, 0x0E, 0x22];
+const YELLOW_BANK = 3;
+
+let midiInput = null, midiOutput = null;
+let stats = { sent: 0, received: 0, pending: 0, failed: 0 };
+let running = false;
+
+function updateStats() {
+  document.getElementById('stat-sent').textContent = stats.sent;
+  document.getElementById('stat-received').textContent = stats.received;
+  document.getElementById('stat-pending').textContent = stats.pending;
+  document.getElementById('stat-failed').textContent = stats.failed;
+}
+
+function log(msg, cls = '') {
+  const el = document.getElementById('log');
+  const ts = new Date().toTimeString().slice(0,8);
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  div.innerHTML = `<span class="ts">${ts}</span><span class="${cls}">${msg}</span>`;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById('log').innerHTML = '';
+  stats = { sent: 0, received: 0, pending: 0, failed: 0 };
+  updateStats();
+}
+
+function setMidiStatus(msg, cls) {
+  const el = document.getElementById('midi-status');
+  el.textContent = msg;
+  el.className = 'midi-status ' + cls;
+}
+
+function unpack7of8(data) {
+  const out = [];
+  for (let i = 0; i < data.length; i += 8) {
+    const msb = data[i];
+    for (let j = 1; j <= 7 && (i + j) < data.length; j++) {
+      out.push((data[i + j] & 0x7F) | (((msb >> (7 - j)) & 1) << 7));
+    }
+  }
+  return out;
+}
+
+function parsePatchName(data) {
+  if (data.length < 20) return null;
+  if (data[1] !== 0x00 || data[2] !== 0x00 || data[3] !== 0x0E || data[4] !== 0x22) return null;
+  const bank = data[6] & 0x0F;
+  const slot = data[8] & 0x7F;
+  const raw = Array.from(data).slice(9, data.length - 1);
+  const unpacked = unpack7of8(raw);
+  const nameBytes = unpacked.slice(63, 78);
+  const name = nameBytes.map(b => b >= 32 && b < 127 ? String.fromCharCode(b) : '').join('').trim() || '(no name)';
+  return { bank, slot, name, unpackedLen: unpacked.length };
+}
+
+function sendPatchRequest(bank, slot) {
+  if (!midiOutput) { log('No MIDI output', 'err'); return false; }
+  const msg = [...ALESIS_HDR, 0x41, bank & 0x0F, 0x00, slot & 0x7F, 0xF7];
+  midiOutput.send(msg);
+  stats.sent++;
+  updateStats();
+  return true;
+}
+
+let pendingRequests = new Map();
+let lastReqBank = 0, lastReqSlot = 0;
+
+function onMidiMessage(e) {
+  const data = e.data;
+  if (!data || data[0] !== 0xF0) return;
+  if (data[1] !== 0x00 || data[2] !== 0x00 || data[3] !== 0x0E || data[4] !== 0x22) return;
+
+  const content = data[5];
+  if (content !== 1) return;
+
+  let bank = data[6] & 0x0F;
+  let slot = data[8] & 0x7F;
+  if (bank === 4) { bank = lastReqBank; slot = lastReqSlot; }
+
+  const key = `${bank}:${slot}`;
+  const parsed = parsePatchName(data);
+
+  if (parsed) {
+    const nameStr = parsed.name.slice(0, 60);
+    stats.received++;
+    stats.pending = Math.max(0, stats.pending - 1);
+    updateStats();
+
+    if (pendingRequests.has(key)) {
+      const req = pendingRequests.get(key);
+      clearTimeout(req.timer);
+      req.resolve({ bank, slot, name: nameStr, bytes: data.length });
+      pendingRequests.delete(key);
+    }
+    log(`RX bank=${bank} slot=${slot} [${data.length}b] unpacked=${parsed.unpackedLen} "${nameStr}"`, 'ok');
+  } else {
+    log(`RX unrecognized patch data [${data.length}b]`, 'err');
+  }
+}
+
+async function requestAndWait(bank, slot, timeoutMs = 1000) {
+  return new Promise((resolve, reject) => {
+    const key = `${bank}:${slot}`;
+    lastReqBank = bank;
+    lastReqSlot = slot;
+    sendPatchRequest(bank, slot);
+    stats.pending++;
+    updateStats();
+    const timer = setTimeout(() => {
+      if (pendingRequests.has(key)) {
+        pendingRequests.delete(key);
+        stats.pending = Math.max(0, stats.pending - 1);
+        updateStats();
+        reject(new Error('timeout'));
+      }
+    }, timeoutMs);
+    pendingRequests.set(key, { resolve, reject, timer });
+  });
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function setRunning(v) {
+  running = v;
+  ['btn-single','btn-3','btn-10','btn-auto'].forEach(id => {
+    document.getElementById(id).disabled = v;
+  });
+}
+
+async function testSingle() {
+  setRunning(true);
+  log('--- Test Single: Yellow bank slot 0 ---', 'info');
+  try {
+    const r = await requestAndWait(YELLOW_BANK, 0, 3000);
+    log(`SUCCESS: "${r.name}" in ${r.bytes}b`, 'ok');
+  } catch (e) {
+    stats.failed++;
+    updateStats();
+    log('FAILED: no response within 3s', 'err');
+  }
+  setRunning(false);
+}
+
+async function test3x1s() {
+  setRunning(true);
+  log('--- Test 3 requests 1sec apart ---', 'info');
+  for (let i = 0; i < 3; i++) {
+    if (i > 0) { log(`Waiting 1000ms before slot ${i}...`, 'send'); await delay(1000); }
+    log(`Sending slot ${i}...`, 'send');
+    try {
+      const r = await requestAndWait(YELLOW_BANK, i, 3000);
+      log(`Slot ${i} OK: "${r.name}"`, 'ok');
+    } catch {
+      stats.failed++;
+      updateStats();
+      log(`Slot ${i} FAILED`, 'err');
+    }
+  }
+  log('--- Done ---', 'info');
+  setRunning(false);
+}
+
+async function test10x500ms() {
+  setRunning(true);
+  log('--- Test 10 requests 500ms apart ---', 'info');
+  for (let i = 0; i < 10; i++) {
+    if (i > 0) { log(`Waiting 500ms before slot ${i}...`, 'send'); await delay(500); }
+    log(`Sending slot ${i}...`, 'send');
+    try {
+      const r = await requestAndWait(YELLOW_BANK, i, 2000);
+      log(`Slot ${i} OK: "${r.name}"`, 'ok');
+    } catch {
+      stats.failed++;
+      updateStats();
+      log(`Slot ${i} FAILED`, 'err');
+    }
+  }
+  log('--- Done ---', 'info');
+  setRunning(false);
+}
+
+async function autoBackupYellow() {
+  setRunning(true);
+  log('--- Auto Backup Yellow Bank (128 slots, adaptive timing) ---', 'info');
+  let interval = 500;
+  const MIN_INTERVAL = 50;
+  const TIMEOUT = 1000;
+  const MAX_RETRIES = 3;
+  const startTime = Date.now();
+
+  for (let slot = 0; slot < 128; slot++) {
+    let received = false;
+    for (let attempt = 0; attempt < MAX_RETRIES && !received; attempt++) {
+      if (attempt > 0) log(`Retry ${attempt} for slot ${slot}`, 'send');
+      const reqTime = Date.now();
+      try {
+        const r = await requestAndWait(YELLOW_BANK, slot, TIMEOUT);
+        const elapsed = Date.now() - reqTime;
+        received = true;
+        if (elapsed < interval * 0.5) {
+          interval = Math.max(MIN_INTERVAL, Math.round(elapsed * 1.5));
+        }
+        log(`Slot ${slot} OK [${elapsed}ms] interval=${interval}ms: "${r.name}"`, 'ok');
+        if (slot < 127) await delay(Math.max(MIN_INTERVAL, interval - elapsed));
+      } catch {
+        stats.failed++;
+        updateStats();
+        log(`Slot ${slot} attempt ${attempt + 1} timeout (${TIMEOUT}ms)`, 'err');
+        interval = Math.min(1000, interval * 2);
+        if (attempt < MAX_RETRIES - 1) await delay(200);
+      }
+    }
+    if (!received) log(`Slot ${slot} GAVE UP after ${MAX_RETRIES} retries`, 'err');
+  }
+
+  const totalMs = Date.now() - startTime;
+  log(`--- Backup complete: ${stats.received} received, ${stats.failed} failed, ${Math.round(totalMs/1000)}s total ---`, 'info');
+  setRunning(false);
+}
+
+async function initMidi() {
+  try {
+    const access = await navigator.requestMIDIAccess({ sysex: true });
+    let input = null, output = null;
+
+    for (const i of access.inputs.values()) {
+      if (i.name.toLowerCase().includes('focusrite') || i.name.toLowerCase().includes('usb')) {
+        input = i;
+      }
+    }
+    for (const o of access.outputs.values()) {
+      if (o.name.toLowerCase().includes('focusrite') || o.name.toLowerCase().includes('usb')) {
+        output = o;
+      }
+    }
+
+    if (!input && access.inputs.size > 0) input = [...access.inputs.values()][0];
+    if (!output && access.outputs.size > 0) output = [...access.outputs.values()][0];
+
+    if (input && output) {
+      midiInput = input;
+      midiOutput = output;
+      midiInput.onmidimessage = onMidiMessage;
+      setMidiStatus(`MIDI OK: IN="${input.name}" OUT="${output.name}"`, 'midi-ok');
+      log(`Connected: IN="${input.name}" OUT="${output.name}"`, 'info');
+      const inputs = [...access.inputs.values()].map(i => i.name);
+      const outputs = [...access.outputs.values()].map(o => o.name);
+      log(`All inputs: ${inputs.join(', ')}`, 'info');
+      log(`All outputs: ${outputs.join(', ')}`, 'info');
+    } else {
+      setMidiStatus('No MIDI device found', 'midi-err');
+      log(`No MIDI found. Inputs: ${[...access.inputs.values()].map(i=>i.name).join(', ')||'none'}`, 'err');
+    }
+  } catch (e) {
+    setMidiStatus('MIDI access denied: ' + e.message, 'midi-err');
+    log('MIDI error: ' + e.message, 'err');
+  }
+}
+
+initMidi();
+</script>
+</body>
+</html>
