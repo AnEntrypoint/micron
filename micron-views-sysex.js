@@ -6,6 +6,23 @@ import { defaultPatch, sendAllParams } from './micron-patch.js';
 
 const CONTENT_TYPES = ['patch','rhythm','pattern'];
 if (!S.sysexContentType) S.sysexContentType = 'patch';
+if (!S.sysexBanks) {
+  S.sysexBanks = [Array(128).fill(null),Array(128).fill(null),Array(128).fill(null),Array(128).fill(null)];
+  S.sysexPatterns = Array(128).fill(null);
+  S.sysexSetups = Array(128).fill(null);
+  let restored = 0;
+  for (let b = 0; b < 4; b++) for (let s = 0; s < 128; s++) {
+    try { const item = localStorage.getItem(`micron_patch_${b}_${s}`);
+      if (item) { const d = JSON.parse(item); S.sysexBanks[b][s] = d; restored++; } } catch(_) {}
+  }
+  for (let s = 0; s < 128; s++) {
+    try { const item = localStorage.getItem(`micron_pattern_${s}`);
+      if (item) { S.sysexPatterns[s] = JSON.parse(item); restored++; } } catch(_) {}
+    try { const item = localStorage.getItem(`micron_setup_${s}`);
+      if (item) { S.sysexSetups[s] = JSON.parse(item); restored++; } } catch(_) {}
+  }
+  if (restored) console.log(`Restored ${restored} items from localStorage`);
+}
 
 let render = ()=>{};
 export function setRender(fn) { render=fn; }
@@ -41,7 +58,8 @@ export function renderSysExTab() {
         </div>
         <div class=pr>
           <label>Export Bank</label>
-          <button class=tbtn onclick=${()=>exportSyx()}>Export as .syx</button>
+          <button class=tbtn onclick=${()=>exportSyx()}>Export Bank .syx</button>
+          <button class=tbtn onclick=${()=>exportAllSyx()}>Export All Banks .syx</button>
         </div>
       </div>
       <div class=section>
@@ -116,41 +134,52 @@ export function handleSysEx(data) {
       let { bank, slot, name, params } = parsed;
       if (bank === 4 && S._lastReqBank !== undefined) { bank = S._lastReqBank; slot = S._lastReqSlot; }
       if (!S.sysexBanks) S.sysexBanks = [Array(128).fill(null),Array(128).fill(null),Array(128).fill(null),Array(128).fill(null)];
-      if (bank>=0&&bank<4&&slot>=0&&slot<128) S.sysexBanks[bank][slot] = {name, params};
-      if (bank===S.sysexSelectedBank) S.sysexBank[slot] = {name, params};
+      const raw = Array.from(data);
+      if (bank>=0&&bank<=4) {
+        if (!S.sysexBanks[4]) S.sysexBanks[4] = Array(4).fill(null);
+        const maxSlot = bank === 4 ? 3 : 127;
+        if (slot >= 0 && slot <= maxSlot) {
+          S.sysexBanks[bank][slot] = {name, params, raw};
+          try { localStorage.setItem(`micron_patch_${bank}_${slot}`, JSON.stringify({name, raw})); } catch(_) {}
+        }
+      }
+      if (bank===S.sysexSelectedBank) S.sysexBank[slot] = {name, params, raw};
       S.patch = {...defaultPatch(), ...params};
       sendAllParams(S.patch);
       S.sysexLog = `Rx patch: "${name}" bank ${BANKS[bank]||bank} slot ${slot}`;
       addToLibrary(name, params, params.category||0);
     }
   } else if (content === 3) {
+    const raw = Array.from(data);
     const parsed = parsePatternDump(data);
-    if (parsed) {
-      const { slot, name, len, grid, type, steps } = parsed;
-      if (slot >= 0 && slot < S.patterns.length) {
-        S.patterns[slot] = { name, len, grid, type, steps };
-      } else if (slot >= S.patterns.length) {
-        while (S.patterns.length <= slot) S.patterns.push({name:`Pat ${S.patterns.length+1}`,len:16,grid:0.0625,type:'seq',steps:Array.from({length:64},()=>({notes:[],len:0.0625,prob:100}))});
-        S.patterns[slot] = { name, len, grid, type, steps };
-      }
-      S.sysexLog = `Rx pattern: "${name}" slot ${slot}`;
-    } else {
-      S.sysexLog = `Rx pattern data [${data.length}b] (unrecognized format)`;
+    const slot = data[8] & 0x7F;
+    const name = parsed?.name || `Pattern ${slot+1}`;
+    if (!S.sysexPatterns) S.sysexPatterns = Array(128).fill(null);
+    if (slot >= 0 && slot < 128) {
+      S.sysexPatterns[slot] = {name, raw};
+      try { localStorage.setItem(`micron_pattern_${slot}`, JSON.stringify({name, raw})); } catch(_) {}
     }
+    if (parsed) {
+      const { len, grid, type, steps } = parsed;
+      while (S.patterns.length <= slot) S.patterns.push({name:`Pat ${S.patterns.length+1}`,len:16,grid:0.0625,type:'seq',steps:Array.from({length:64},()=>({notes:[],len:0.0625,prob:100}))});
+      S.patterns[slot] = { name, len, grid, type, steps };
+    }
+    S.sysexLog = `Rx pattern: "${name}" slot ${slot} [${data.length}b]`;
   } else if (content === 2) {
+    const raw = Array.from(data);
+    const slot = data[8] & 0x7F;
     const parsed = parseRhythmDump(data);
-    if (parsed) {
-      const { slot, name, len, grid, drums } = parsed;
-      if (slot >= 0 && slot < S.rhythms.length) {
-        S.rhythms[slot] = { name, len, grid, drums };
-      } else if (slot >= S.rhythms.length) {
-        while (S.rhythms.length <= slot) S.rhythms.push(defaultRhythm());
-        S.rhythms[slot] = { name, len, grid, drums };
-      }
-      S.sysexLog = `Rx rhythm: "${name}" slot ${slot}`;
-    } else {
-      S.sysexLog = `Rx setup/rhythm data [${data.length}b]`;
+    const name = parsed?.name || `Setup ${slot+1}`;
+    if (!S.sysexSetups) S.sysexSetups = Array(128).fill(null);
+    if (slot >= 0 && slot < 128) {
+      S.sysexSetups[slot] = {name, raw};
+      try { localStorage.setItem(`micron_setup_${slot}`, JSON.stringify({name, raw})); } catch(_) {}
     }
+    if (parsed) {
+      while (S.rhythms.length <= slot) S.rhythms.push(defaultRhythm());
+      S.rhythms[slot] = { name, len: parsed.len, grid: parsed.grid, drums: parsed.drums };
+    }
+    S.sysexLog = `Rx setup/rhythm: "${name}" slot ${slot} [${data.length}b]`;
   }
   render();
 }
@@ -184,12 +213,30 @@ function importSyx() {
   input.click();
 }
 
+function downloadBytes(bytes, filename) {
+  const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], {type:'application/octet-stream'}));
+  Object.assign(document.createElement('a'), {href:url, download:filename}).click();
+  URL.revokeObjectURL(url);
+}
+
 function exportSyx() {
   const bank = S.sysexBanks&&S.sysexBanks[S.sysexSelectedBank] || S.sysexBank;
-  const patches = bank.filter(Boolean);
-  if(!patches.length) { alert('No patches in bank to export'); return; }
-  const bytes = patches.flatMap(() => [0xF0,0x00,0x00,0x0E,0x22,...Array(373).fill(0),0xF7]);
-  const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], {type:'application/octet-stream'}));
-  Object.assign(document.createElement('a'), {href:url, download:'micron-bank.syx'}).click();
-  URL.revokeObjectURL(url);
+  const withRaw = (bank||[]).filter(p=>p?.raw);
+  if (!withRaw.length) { alert('No backed-up patches in this bank. Run backup first.'); return; }
+  const bankName = (BANKS[S.sysexSelectedBank]||'bank').toLowerCase().replace(/\s/g,'-');
+  downloadBytes(withRaw.flatMap(p=>p.raw), `micron-${bankName}.syx`);
+}
+
+function exportAllSyx() {
+  const patchRaw = (S.sysexBanks||[]).flatMap(bank => (bank||[]).filter(p=>p?.raw).flatMap(p=>p.raw));
+  const patternRaw = (S.sysexPatterns||[]).filter(p=>p?.raw).flatMap(p=>p.raw);
+  const setupRaw = (S.sysexSetups||[]).filter(p=>p?.raw).flatMap(p=>p.raw);
+  const allRaw = [...patchRaw, ...patternRaw, ...setupRaw];
+  if (!allRaw.length) { alert('Nothing backed up yet. Run backup and send patterns/setups from Micron first.'); return; }
+  const pCount = (S.sysexBanks||[]).flatMap(b=>b||[]).filter(p=>p?.raw).length;
+  const patCount = (S.sysexPatterns||[]).filter(p=>p?.raw).length;
+  const sCount = (S.sysexSetups||[]).filter(p=>p?.raw).length;
+  downloadBytes(allRaw, 'micron-full-backup.syx');
+  S.sysexLog = `Exported: ${pCount} patches, ${patCount} patterns, ${sCount} setups/rhythms → micron-full-backup.syx`;
+  render();
 }

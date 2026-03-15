@@ -133,18 +133,27 @@ async function sendEverything() {
 }
 
 async function requestEverything() {
-  const patchBanks = BANKS.length - 1;
-  const total = patchBanks * 128;
+  const mainBanks = BANKS.length - 1;
+  const total = mainBanks * 128 + 4;
   S.syncProgress = { done: 0, total, label: 'Starting', startedAt: Date.now() };
   render();
-  for (let b = 0; b < patchBanks; b++) {
+  for (let b = 0; b < mainBanks; b++) {
     S.syncProgress.label = `Bank ${BANKS[b]}`;
     await requestBankIndividual(S, b, s => {
       S.syncProgress.done = b * 128 + Math.min(s, 128);
       render();
     });
   }
-  S.syncProgress.done = total;
+  S.syncProgress.label = 'Edit Bank';
+  const { requestPatch } = await import('./micron-sysex.js');
+  for (let s = 0; s < 4; s++) {
+    S._lastReqBank = 4; S._lastReqSlot = s;
+    requestPatch(4, s);
+    await new Promise(r => setTimeout(r, 500));
+    S.syncProgress.done = mainBanks * 128 + s + 1;
+    render();
+  }
   S.syncProgress.label = 'Done';
+  S.syncProgress.done = total;
   render();
 }
