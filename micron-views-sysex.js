@@ -1,0 +1,143 @@
+import { html } from './micron-ui-core.js';
+import { S } from './micron-state.js';
+import { requestPatch, requestBank, parsePatchDump } from './micron-sysex.js';
+import { BANKS, PATCH_CATEGORIES } from './micron-data.js';
+import { defaultPatch, sendAllParams } from './micron-patch.js';
+import { addToLibrary } from './micron-state.js';
+
+let render = ()=>{};
+export function setRender(fn) { render=fn; }
+
+export function renderSysExTab() {
+  return html`<div>
+    <div class=grid2>
+      <div class=section>
+        <h4>Request Patch</h4>
+        <div class=pr>
+          <label>Bank</label>
+          <select onchange=${e=>{S.sysexSelectedBank=+e.target.value;render();}}>
+            ${BANKS.map((b,i)=>html`<option value=${i} selected=${S.sysexSelectedBank===i}>${b}</option>`)}
+          </select>
+        </div>
+        <div class=pr>
+          <label>Slot</label>
+          <input type=number min=0 max=${S.sysexSelectedBank===4?3:127} value=${S.sysexSelectedSlot} oninput=${e=>{S.sysexSelectedSlot=Math.max(0,Math.min(S.sysexSelectedBank===4?3:127,+e.target.value));}} class=num-in />
+        </div>
+        <div class=btn-group>
+          <button class=tbtn onclick=${()=>doRequest()}>Request Single Patch</button>
+          <button class=tbtn onclick=${()=>doRequestBank()}>Request Full Bank</button>
+        </div>
+        <div class=pr>
+          <label>Import .syx</label>
+          <button class=tbtn onclick=${()=>importSyx()}>Import SysEx File</button>
+        </div>
+        <div class=pr>
+          <label>Export Bank</label>
+          <button class=tbtn onclick=${()=>exportSyx()}>Export as .syx</button>
+        </div>
+      </div>
+      <div class=section>
+        <h4>Status</h4>
+        <div class=syx-log>${S.sysexLog||'No SysEx activity yet.'}</div>
+        <div class=syx-hex id=syx-hex></div>
+      </div>
+    </div>
+    <div class=section>
+      <h4>Patch Bank</h4>
+      <input placeholder="Search patches..." value=${S.sysexBankFilter} oninput=${e=>{S.sysexBankFilter=e.target.value;render();}} class=search-in />
+      <div class=bank-grid>
+        ${S.sysexBank.map((p,i)=>{
+          if (S.sysexBankFilter && p && !p.name.toLowerCase().includes(S.sysexBankFilter.toLowerCase())) return null;
+          return html`<div class=${'bank-cell'+(p?' loaded':'')} title=${p?p.name:''} onclick=${()=>{if(p){loadBankPatch(p,i);}}}>
+            <span class=bc-num>${i+1}</span>
+            <span class=bc-name>${p?p.name:'—'}</span>
+          </div>`;
+        })}
+      </div>
+    </div>
+  </div>`;
+}
+
+function doRequest() {
+  const msg = [0xF0,0x00,0x00,0x0E,0x22,0x41,S.sysexSelectedBank&0x0F,0x00,S.sysexSelectedSlot&0x7F,0xF7];
+  import('./micron-midi.js').then(({midiOut}) => midiOut(msg));
+  S.sysexLog = `Requested patch ${S.sysexSelectedSlot} from bank ${BANKS[S.sysexSelectedBank]}`;
+  render();
+}
+
+function doRequestBank() {
+  const msg = [0xF0,0x00,0x00,0x0E,0x22,0x41,S.sysexSelectedBank&0x0F,0x01,0x00,0xF7];
+  import('./micron-midi.js').then(({midiOut}) => midiOut(msg));
+  S.sysexLog = `Requested full bank ${BANKS[S.sysexSelectedBank]}`;
+  render();
+}
+
+export function handleSysEx(data) {
+  const hex = Array.from(data).map(b=>b.toString(16).padStart(2,'0')).join(' ');
+  S.sysexLog = `Rx: [${data.length}b] ${hex.slice(0,120)}...`;
+  if (data[1]===0x00&&data[2]===0x00&&data[3]===0x0E&&data[4]===0x22) {
+    const parsed = parsePatchDump(data);
+    if (parsed) {
+      const slot = parsed.slot;
+      if (slot>=0&&slot<128) S.sysexBank[slot] = {name:parsed.name, params:parsed.params};
+      S.patch = {...defaultPatch(), ...parsed.params};
+      sendAllParams(S.patch);
+      S.sysexLog = `Rx: "${parsed.name}" slot ${slot}, ${Object.keys(parsed.params).length} params`;
+      addToLibrary(parsed.name, parsed.params, parsed.params.category||0);
+    }
+  }
+  render();
+}
+
+function loadBankPatch(p, i) {
+  S.patch = {...defaultPatch(), ...p.params};
+  sendAllParams(S.patch);
+  S.sysexLog = `Loaded "${p.name}" (slot ${i+1})`;
+  render();
+}
+
+function importSyx() {
+  const input = document.createElement('input');
+  input.type='file'; input.accept='.syx,.bin,.mid';
+  input.onchange = e => {
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const data = new Uint8Array(ev.target.result);
+      let i=0, count=0;
+      while(i<data.length) {
+        if(data[i]===0xF0) {
+          let end=data.indexOf(0xF7,i);
+          if(end<0) break;
+          const msg=data.slice(i,end+1);
+          const parsed=parsePatchDump(msg);
+          if(parsed) {
+            const slot=parsed.slot;
+            if(slot>=0&&slot<128) S.sysexBank[slot]={name:parsed.name,params:parsed.params};
+            count++;
+          }
+          i=end+1;
+        } else i++;
+      }
+      S.sysexLog=`Imported ${count} patches from file`;
+      render();
+    };
+    reader.readAsArrayBuffer(file);
+  };
+  input.click();
+}
+
+function exportSyx() {
+  const patches = S.sysexBank.filter(Boolean);
+  if(!patches.length) { alert('No patches in bank to export'); return; }
+  const bytes = [];
+  patches.forEach(p => {
+    bytes.push(0xF0,0x00,0x00,0x0E,0x22);
+    bytes.push(...Array(373).fill(0));
+    bytes.push(0xF7);
+  });
+  const blob = new Blob([new Uint8Array(bytes)], {type:'application/octet-stream'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='micron-bank.syx'; a.click();
+  URL.revokeObjectURL(url);
+}
