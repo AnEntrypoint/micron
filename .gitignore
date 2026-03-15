@@ -1,2 +1,4 @@
 .gm-stop-verified
 server.js
+node_modules/
+bun.lock
