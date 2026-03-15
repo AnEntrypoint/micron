@@ -1,6 +1,7 @@
 import { html } from './micron-ui-core.js';
 import { S, rhythm, saveState, defaultRhythm } from './micron-state.js';
 import { sendRhythmSysEx, requestRhythm } from './micron-sysex.js';
+import { renderQuickControls } from './micron-views-quickcontrols.js';
 
 let render = ()=>{};
 export function setRender(fn) { render=fn; }
@@ -13,6 +14,7 @@ const GRID_LABELS = {0.0625:'1/16',0.125:'1/8',0.25:'1/4',0.5:'1/2'};
 export function renderRhythmTab() {
   const r = rhythm();
   return html`<div>
+    ${renderQuickControls(render)}
     ${renderVelPopover()}
     <div class=section>
       <h4>Rhythms</h4>
@@ -31,6 +33,7 @@ export function renderRhythmTab() {
       <div class=pr>
         <label>Name</label>
         <input type=text value=${r.name} oninput=${e=>{r.name=e.target.value;saveState();render();}} class=name-in />
+        <button class=tbtn onclick=${()=>sendCurrentRhythm()} title="Send to Micron">Send</button>
       </div>
       <div class=pr>
         <label>Length (steps)</label>
@@ -67,6 +70,11 @@ export function renderRhythmTab() {
       </div>
     </div>
   </div>`;
+}
+
+function sendCurrentRhythm() {
+  const slot = (S.standaloneSlots && S.standaloneSlots['r'+S.rhythmIdx]) ?? S.rhythmSysexSlot ?? S.rhythmIdx;
+  sendRhythmSysEx(rhythm(), slot);
 }
 
 function renderDrumRow(drum, di, r) {

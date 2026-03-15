@@ -39,6 +39,7 @@ export function renderLibraryTab() {
         <div class=lc-cat>${CAT_ICONS[p.category]||''} ${PATCH_CATEGORIES[p.category]||''}</div>
         <div class=lc-actions>
           <button class=tbtn onclick=${()=>loadPatch(p)} title="Load">Load</button>
+          <button class="tbtn accent" onclick=${()=>editPatch(p)} title="Load and edit">Edit</button>
           <button class=${'tbtn'+(p.fave?' active':'')} onclick=${()=>{toggleFave(p.id);render();}} title="Favorite">★</button>
           <button class=tbtn onclick=${()=>setAB(0,p)} title="Set A">A</button>
           <button class=tbtn onclick=${()=>setAB(1,p)} title="Set B">B</button>
@@ -90,6 +91,13 @@ function renderABSection() {
 function loadPatch(p) {
   S.patch = {...defaultPatch(), ...p.patch};
   sendAllParams(S.patch);
+  render();
+}
+
+function editPatch(p) {
+  S.patch = {...defaultPatch(), ...p.patch};
+  sendAllParams(S.patch);
+  S.tab = 'patch';
   render();
 }
 

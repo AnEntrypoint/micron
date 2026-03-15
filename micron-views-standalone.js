@@ -18,22 +18,36 @@ function patchCount() {
   return S.sysexBanks.slice(0, 4).reduce((n,b) => n + b.filter(Boolean).length, 0);
 }
 
+function hintToggle(key, text) {
+  const open = S.collapsedSections['hint_'+key];
+  return html`<span>
+    <button class=hint-toggle onclick=${()=>{S.collapsedSections['hint_'+key]=!open;render();}} title="Show instructions">?</button>
+    ${open?html`<span class=hint-box>${text}</span>`:null}
+  </span>`;
+}
+
 export function renderStandaloneTab() {
   ensureState();
   const syncing = S.syncProgress && S.syncProgress.done < S.syncProgress.total;
+  const patCount = S.patterns.filter(p=>p.steps&&p.steps.some(s=>s.notes&&s.notes.length)).length;
+  const rCount = S.rhythms.filter(r=>r.drums&&r.drums.some(d=>d.steps&&d.steps.some(s=>s.active))).length;
   return html`<div>
     <div class=section>
-      <h4>Backup Patches from Synth</h4>
-      <p class=hint>Requests all 512 patches (4 banks × 128) via SysEx. Patches arrive one at a time — takes ~2 min for all banks. Patterns, rhythms and setups must be sent from the Micron itself via its menu: [patterns/rhythms/setups] → Send MIDI sysex?</p>
+      <div class=standalone-stats>
+        <div class=stat-badge><span class=stat-num>${patchCount()}</span><span class=stat-label>/ 512 patches</span></div>
+        <div class=stat-badge><span class=stat-num>${patCount}</span><span class=stat-label>/ ${S.patterns.length} patterns</span></div>
+        <div class=stat-badge><span class=stat-num>${rCount}</span><span class=stat-label>/ ${S.rhythms.length} rhythms</span></div>
+      </div>
+    </div>
+
+    <div class=section>
+      <h4>Backup from Synth ${hintToggle('backup','Requests all 512 patches (4 banks × 128) via SysEx. Takes ~2 min. Patterns/rhythms must be sent from the Micron: [patterns/rhythms] → push knob → Send MIDI sysex?')}</h4>
       ${S.syncProgress ? html`<div class=send-progress>
         <div class=progress-bar style=${'width:'+Math.round(S.syncProgress.done/S.syncProgress.total*100)+'%'}></div>
         <span>${S.syncProgress.label||''} ${S.syncProgress.done} / ${S.syncProgress.total}</span>
         ${S.syncProgress.done >= S.syncProgress.total ? html`<span class=ok> Requests sent — waiting for synth responses</span>` : null}
       </div>` : null}
-      <div class=sync-summary>
-        <span>Patches: <b>${patchCount()}</b> / 512</span>
-        ${S.syncProgress?.startedAt ? html`<span class=sep></span><span class=hint>Last backup: ${new Date(S.syncProgress.startedAt).toLocaleTimeString()}</span>` : null}
-      </div>
+      ${S.syncProgress?.startedAt ? html`<div class=hint>Last backup: ${new Date(S.syncProgress.startedAt).toLocaleTimeString()}</div>` : null}
       <div class=btn-group>
         <button class=${'tbtn'+(syncing?' disabled':'')} onclick=${()=>requestEverything()}>Backup All Patches</button>
         <button class=tbtn onclick=${()=>{S.syncProgress=null;render();}}>Clear</button>
@@ -41,8 +55,7 @@ export function renderStandaloneTab() {
     </div>
 
     <div class=section>
-      <h4>Send to Synth</h4>
-      <p class=hint>Upload all local patterns and rhythms to the Micron.</p>
+      <h4>Send to Synth ${hintToggle('send','Uploads all local patterns and rhythms to the Micron.')}</h4>
       ${S.sendProgress !== null ? html`<div class=send-progress>
         <div class=progress-bar style=${'width:'+Math.round(S.sendProgress.done/S.sendProgress.total*100)+'%'}></div>
         <span>${S.sendProgress.done} / ${S.sendProgress.total} sent</span>
@@ -55,8 +68,7 @@ export function renderStandaloneTab() {
     </div>
 
     <div class=section>
-      <h4>Patterns</h4>
-      <p class=hint>To receive patterns from the Micron: on the synth go to [patterns] → turn knob to select pattern → push knob → "Send MIDI sysex?" → confirm. The pattern will appear here automatically.</p>
+      <h4>Patterns ${hintToggle('pat','On Micron: [patterns] → turn knob → push knob → "Send MIDI sysex?" → confirm.')}</h4>
       <div class=standalone-list>
         ${S.patterns.map((p,i)=>html`<div class=standalone-slot>
           <span class=slot-name>${p.name||'(empty)'}</span>
@@ -69,8 +81,7 @@ export function renderStandaloneTab() {
     </div>
 
     <div class=section>
-      <h4>Rhythms</h4>
-      <p class=hint>To receive rhythms from the Micron: on the synth go to [rhythms] → select rhythm → push knob → "Send MIDI sysex?" → confirm.</p>
+      <h4>Rhythms ${hintToggle('rhy','On Micron: [rhythms] → select rhythm → push knob → "Send MIDI sysex?" → confirm.')}</h4>
       <div class=standalone-list>
         ${S.rhythms.map((r,i)=>html`<div class=standalone-slot>
           <span class=slot-name>${r.name||'(empty)'}</span>

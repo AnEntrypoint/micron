@@ -28,38 +28,41 @@ let render = ()=>{};
 export function setRender(fn) { render=fn; }
 
 export function renderSysExTab() {
+  const advKey = 'sec_sysex_advanced';
+  const advCollapsed = S.collapsedSections[advKey] !== false;
   return html`<div>
     <div class=grid2>
       <div class=section>
-        <h4>Request from Micron</h4>
-        <div class=pr>
-          <label>Type</label>
-          <select onchange=${e=>{S.sysexContentType=e.target.value;render();}}>
-            ${CONTENT_TYPES.map(t=>html`<option value=${t} selected=${S.sysexContentType===t}>${t}</option>`)}
-          </select>
-        </div>
-        ${S.sysexContentType==='patch'?html`<div class=pr>
-          <label>Bank</label>
-          <select onchange=${e=>{S.sysexSelectedBank=+e.target.value;render();}}>
-            ${BANKS.map((b,i)=>html`<option value=${i} selected=${S.sysexSelectedBank===i}>${b}</option>`)}
-          </select>
-        </div>`:null}
-        <div class=pr>
-          <label>Slot</label>
-          <input type=number min=0 max=127 value=${S.sysexSelectedSlot} oninput=${e=>{S.sysexSelectedSlot=Math.max(0,Math.min(127,+e.target.value));}} class=num-in />
-        </div>
+        <h4>Backup</h4>
         <div class=btn-group>
-          <button class=tbtn onclick=${()=>doRequest()}>Request Single</button>
-          <button class=tbtn onclick=${()=>doRequestAll()}>Request All</button>
-        </div>
-        <div class=pr>
-          <label>Import .syx</label>
           <button class=tbtn onclick=${()=>importSyx()}>Import SysEx File</button>
-        </div>
-        <div class=pr>
-          <label>Export Bank</label>
           <button class=tbtn onclick=${()=>exportSyx()}>Export Bank .syx</button>
           <button class=tbtn onclick=${()=>exportAllSyx()}>Export All Banks .syx</button>
+        </div>
+        <div class=section style="margin-top:8px;padding:0;border:none">
+          <h4 class=sh onclick=${()=>{S.collapsedSections[advKey]=!advCollapsed;render();}}>Advanced <span class=sa>${advCollapsed?'▶':'▼'}</span></h4>
+          ${!advCollapsed?html`<div>
+            <div class=pr>
+              <label>Type</label>
+              <select onchange=${e=>{S.sysexContentType=e.target.value;render();}}>
+                ${CONTENT_TYPES.map(t=>html`<option value=${t} selected=${S.sysexContentType===t}>${t}</option>`)}
+              </select>
+            </div>
+            ${S.sysexContentType==='patch'?html`<div class=pr>
+              <label>Bank</label>
+              <select onchange=${e=>{S.sysexSelectedBank=+e.target.value;render();}}>
+                ${BANKS.map((b,i)=>html`<option value=${i} selected=${S.sysexSelectedBank===i}>${b}</option>`)}
+              </select>
+            </div>`:null}
+            <div class=pr>
+              <label>Slot</label>
+              <input type=number min=0 max=127 value=${S.sysexSelectedSlot} oninput=${e=>{S.sysexSelectedSlot=Math.max(0,Math.min(127,+e.target.value));}} class=num-in />
+            </div>
+            <div class=btn-group>
+              <button class=tbtn onclick=${()=>doRequest()}>Request Single</button>
+              <button class=tbtn onclick=${()=>doRequestAll()}>Request All</button>
+            </div>
+          </div>`:null}
         </div>
       </div>
       <div class=section>

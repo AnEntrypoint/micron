@@ -102,6 +102,7 @@ function startResize(e) {
 }
 
 function renderToolbar() {
+  const patchName = S.patch.patchName || 'Untitled';
   return html`<div id=toolbar>
     <span class=brand>ALESIS <span>MICRON</span></span>
     <span class=sep></span>
@@ -110,8 +111,12 @@ function renderToolbar() {
     <button class=tbtn onclick=${()=>{S.bpm=Math.min(300,S.bpm+1);setClockSend(M.sendClock,S.bpm);schedRender();}}>+</button>
     <button class=${'tbtn'+(S.playing?' stop':' play')} onclick=${()=>togglePlay()}>${S.playing?'■ Stop':'▶ Play'}</button>
     <span class=sep></span>
+    <button class=patch-name-btn onclick=${()=>{S.tab='patch';schedRender();}} title="Edit patch">${patchName}</button>
+    <span class=sep></span>
     <span class=${'midi-dot'+(M.rxFlash?' rx':M.output?' ok':'')}></span>
     <span class=midi-name>${M.output?.name?.slice(0,14)||'No MIDI'}</span>
+    <span class=sep></span>
+    <button class="tbtn panic-btn" onclick=${()=>{allNotesOff();schedRender();}} title="All Notes Off">PANIC</button>
     <span class=sep></span>
     <button class=tbtn onclick=${()=>{S.theme=S.theme==='light'?'dark':'light';document.body.className=S.theme==='light'?'light':'';saveState();schedRender();}}>${S.theme==='light'?'Dark':'Light'}</button>
     <button class=tbtn onclick=${()=>saveState()}>Save</button>

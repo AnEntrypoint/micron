@@ -1,12 +1,15 @@
 import { html } from './micron-ui-core.js';
 import { S, pat, saveState } from './micron-state.js';
 import { noteColor, stepFracLabel } from './micron-data.js';
+import { renderQuickControls } from './micron-views-quickcontrols.js';
+import { sendPatternSysEx } from './micron-sysex.js';
 
 let render = ()=>{};
 export function setRender(fn) { render=fn; }
 
 export function renderPatternsTab() {
   return html`<div>
+    ${renderQuickControls(render)}
     <div class=section>
       <h4>Patterns</h4>
       <div class=pat-grid>
@@ -27,6 +30,7 @@ export function renderPatternsTab() {
       <div class=pr>
         <label>Name</label>
         <input type=text value=${pat().name} oninput=${e=>{pat().name=e.target.value;saveState();render();}} class=name-in />
+        <button class=tbtn onclick=${()=>sendCurrentPattern()} title="Send to Micron">Send</button>
       </div>
       <div class=pr>
         <label>Length</label>
@@ -82,6 +86,11 @@ function pastePat(i) {
 function clearPat(i) {
   S.patterns[i].steps.forEach(s=>{s.notes=[];});
   saveState(); render();
+}
+
+function sendCurrentPattern() {
+  const slot = (S.standaloneSlots && S.standaloneSlots['p'+S.patIdx]) ?? S.patIdx;
+  sendPatternSysEx(pat(), slot);
 }
 
 function renderSongChain() {
