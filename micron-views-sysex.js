@@ -1,6 +1,6 @@
 import { html } from './micron-ui-core.js';
 import { S, defaultRhythm, addToLibrary } from './micron-state.js';
-import { parsePatchDump, parsePatternDump, parseRhythmDump, requestPatch, requestPattern, requestRhythm, requestBankIndividual } from './micron-sysex.js';
+import { parsePatchDump, parsePatternDump, parseRhythmDump, requestBankIndividual } from './micron-sysex.js';
 import { BANKS } from './micron-data.js';
 import { defaultPatch, sendAllParams } from './micron-patch.js';
 
@@ -83,15 +83,14 @@ function doBankRequest(bankIdx) {
 
 function doRequest() {
   if (S.sysexContentType === 'patch') {
-    const msg = [0xF0,0x00,0x00,0x0E,0x22,0x41,S.sysexSelectedBank&0x0F,0x00,S.sysexSelectedSlot&0x7F,0xF7];
-    import('./micron-midi.js').then(({midiOut}) => midiOut(msg));
+    import('./micron-midi.js').then(({midiOut}) => {
+      S._lastReqBank = S.sysexSelectedBank;
+      S._lastReqSlot = S.sysexSelectedSlot;
+      midiOut([0xF0,0x00,0x00,0x0E,0x22,0x41,S.sysexSelectedBank&0x0F,0x00,S.sysexSelectedSlot&0x7F,0xF7]);
+    });
     S.sysexLog = `Requested patch ${S.sysexSelectedSlot} from bank ${BANKS[S.sysexSelectedBank]}`;
-  } else if (S.sysexContentType === 'pattern') {
-    requestPattern(S.sysexSelectedSlot);
-    S.sysexLog = `Requested pattern ${S.sysexSelectedSlot}`;
   } else {
-    requestRhythm(S.sysexSelectedSlot);
-    S.sysexLog = `Requested rhythm ${S.sysexSelectedSlot}`;
+    S.sysexLog = 'Patterns/rhythms cannot be requested remotely. Use the Micron menu: select item → push knob → "Send MIDI sysex?"';
   }
   render();
 }
@@ -99,13 +98,9 @@ function doRequest() {
 function doRequestAll() {
   if (S.sysexContentType === 'patch') {
     doBankRequest(S.sysexSelectedBank);
-    S.sysexLog = `Requesting all patches in bank ${BANKS[S.sysexSelectedBank]} (individual)`;
-  } else if (S.sysexContentType === 'pattern') {
-    import('./micron-sysex.js').then(m=>m.requestAllPatterns());
-    S.sysexLog = 'Requested all patterns';
+    S.sysexLog = `Requesting all patches in bank ${BANKS[S.sysexSelectedBank]}...`;
   } else {
-    import('./micron-sysex.js').then(m=>m.requestAllRhythms());
-    S.sysexLog = 'Requested all rhythms';
+    S.sysexLog = 'Patterns/rhythms/setups cannot be requested remotely. On the Micron: select the item → push knob → "Send MIDI sysex?"';
   }
   render();
 }

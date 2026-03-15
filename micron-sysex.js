@@ -3,20 +3,7 @@ import { midiOut } from './micron-midi.js';
 export { parsePatchDump, parsePatternDump, parseRhythmDump, parseSetupDump, extractParams } from './micron-sysex-parse.js';
 
 const ALESIS_HDR = [0xF0, 0x00, 0x00, 0x0E, 0x22];
-const CONTENT_PATCH = 1, CONTENT_SETUP = 2, CONTENT_PATTERN = 3;
 
-export function requestPattern(slot) {
-  midiOut([...ALESIS_HDR, 0x41, CONTENT_PATTERN, 0x00, slot & 0x7F, 0xF7]);
-}
-export function requestAllPatterns() {
-  midiOut([...ALESIS_HDR, 0x41, CONTENT_PATTERN, 0x01, 0x00, 0xF7]);
-}
-export function requestRhythm(slot) {
-  midiOut([...ALESIS_HDR, 0x41, CONTENT_SETUP, 0x00, slot & 0x7F, 0xF7]);
-}
-export function requestAllRhythms() {
-  midiOut([...ALESIS_HDR, 0x41, CONTENT_SETUP, 0x01, 0x00, 0xF7]);
-}
 
 function buildMicronSysEx(content, bank, slot, dataBytes) {
   const padded = [...dataBytes];
@@ -33,7 +20,7 @@ export function sendPatternSysEx(pattern, slot) {
     data.push(s.notes.length ? (s.notes[0].vel & 0x7F) : 0);
     data.push(s.notes.length ? Math.min(127, Math.round(s.notes[0].len * 16)) : 0);
   });
-  midiOut(buildMicronSysEx(CONTENT_PATTERN, 3, slot, data));
+  midiOut(buildMicronSysEx(3, 3, slot, data));
 }
 
 export function sendRhythmSysEx(rhythm, slot) {
@@ -44,7 +31,7 @@ export function sendRhythmSysEx(rhythm, slot) {
     data.push(...pname, 0, drum.level & 0x7F, (drum.pan+50) & 0x7F);
     drum.steps.slice(0,64).forEach(s => { data.push(s.active ? (s.vel & 0x7F) : 0); });
   });
-  midiOut(buildMicronSysEx(CONTENT_SETUP, 3, slot, data));
+  midiOut(buildMicronSysEx(2, 3, slot, data));
 }
 
 export function pack7of8(bytes) {
@@ -74,9 +61,6 @@ export function requestPatch(bank, slot) {
   midiOut([0xF0, 0x00, 0x00, 0x0E, 0x22, 0x41, bank & 0x0F, 0x00, slot & 0x7F, 0xF7]);
 }
 
-export function requestBank(bank) {
-  midiOut([0xF0, 0x00, 0x00, 0x0E, 0x22, 0x41, bank & 0x0F, 0x01, 0x00, 0xF7]);
-}
 
 export function waitForSlot(S, bankIdx, slot, timeoutMs) {
   return new Promise(res => {

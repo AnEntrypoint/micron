@@ -1,6 +1,6 @@
 import { html } from './micron-ui-core.js';
 import { S, saveState } from './micron-state.js';
-import { sendPatternSysEx, sendRhythmSysEx, requestPattern, requestRhythm, requestAllPatterns, requestAllRhythms, requestBankIndividual } from './micron-sysex.js';
+import { sendPatternSysEx, sendRhythmSysEx, requestBankIndividual } from './micron-sysex.js';
 import { BANKS } from './micron-data.js';
 
 let render = ()=>{};
@@ -23,8 +23,8 @@ export function renderStandaloneTab() {
   const syncing = S.syncProgress && S.syncProgress.done < S.syncProgress.total;
   return html`<div>
     <div class=section>
-      <h4>Sync from Synth</h4>
-      <p class=hint>Request all patches (4 banks × 128 = 512), all patterns (128), all rhythms, and setup from the Micron. Data received via SysEx will populate the editor automatically.</p>
+      <h4>Backup Patches from Synth</h4>
+      <p class=hint>Requests all 512 patches (4 banks × 128) via SysEx. Patches arrive one at a time — takes ~2 min for all banks. Patterns, rhythms and setups must be sent from the Micron itself via its menu: [patterns/rhythms/setups] → Send MIDI sysex?</p>
       ${S.syncProgress ? html`<div class=send-progress>
         <div class=progress-bar style=${'width:'+Math.round(S.syncProgress.done/S.syncProgress.total*100)+'%'}></div>
         <span>${S.syncProgress.label||''} ${S.syncProgress.done} / ${S.syncProgress.total}</span>
@@ -32,15 +32,11 @@ export function renderStandaloneTab() {
       </div>` : null}
       <div class=sync-summary>
         <span>Patches: <b>${patchCount()}</b> / 512</span>
-        <span class=sep></span>
-        <span>Patterns: <b>${S.patterns.filter(p=>p.steps.some(s=>s.notes.length)).length}</b> non-empty</span>
-        <span class=sep></span>
-        <span>Rhythms: <b>${S.rhythms.length}</b></span>
-        ${S.syncProgress?.startedAt ? html`<span class=sep></span><span class=hint>Last requested: ${new Date(S.syncProgress.startedAt).toLocaleTimeString()}</span>` : null}
+        ${S.syncProgress?.startedAt ? html`<span class=sep></span><span class=hint>Last backup: ${new Date(S.syncProgress.startedAt).toLocaleTimeString()}</span>` : null}
       </div>
       <div class=btn-group>
-        <button class=${'tbtn'+(syncing?' disabled':'')} onclick=${()=>requestEverything()}>Request All from Synth</button>
-        <button class=tbtn onclick=${()=>{S.syncProgress=null;render();}}>Clear Status</button>
+        <button class=${'tbtn'+(syncing?' disabled':'')} onclick=${()=>requestEverything()}>Backup All Patches</button>
+        <button class=tbtn onclick=${()=>{S.syncProgress=null;render();}}>Clear</button>
       </div>
     </div>
 
@@ -60,28 +56,28 @@ export function renderStandaloneTab() {
 
     <div class=section>
       <h4>Patterns</h4>
+      <p class=hint>To receive patterns from the Micron: on the synth go to [patterns] → turn knob to select pattern → push knob → "Send MIDI sysex?" → confirm. The pattern will appear here automatically.</p>
       <div class=standalone-list>
         ${S.patterns.map((p,i)=>html`<div class=standalone-slot>
           <span class=slot-name>${p.name||'(empty)'}</span>
           <span class=slot-info>${p.len} steps · ${p.type}</span>
           <label>Slot</label>
           <input type=number min=0 max=127 value=${getSlot('p',i)} oninput=${e=>setSlot('p',i,+e.target.value)} class=num-in style="width:52px" />
-          <button class=tbtn onclick=${()=>sendPatternNow(p,i)}>Send</button>
-          <button class=tbtn onclick=${()=>requestPattern(getSlot('p',i))}>Request</button>
+          <button class=tbtn onclick=${()=>sendPatternNow(p,i)}>Send to Synth</button>
         </div>`)}
       </div>
     </div>
 
     <div class=section>
       <h4>Rhythms</h4>
+      <p class=hint>To receive rhythms from the Micron: on the synth go to [rhythms] → select rhythm → push knob → "Send MIDI sysex?" → confirm.</p>
       <div class=standalone-list>
         ${S.rhythms.map((r,i)=>html`<div class=standalone-slot>
           <span class=slot-name>${r.name||'(empty)'}</span>
           <span class=slot-info>${r.len} steps · ${r.drums.length} drums</span>
           <label>Slot</label>
           <input type=number min=0 max=127 value=${getSlot('r',i)} oninput=${e=>setSlot('r',i,+e.target.value)} class=num-in style="width:52px" />
-          <button class=tbtn onclick=${()=>sendRhythmNow(r,i)}>Send</button>
-          <button class=tbtn onclick=${()=>requestRhythm(getSlot('r',i))}>Request</button>
+          <button class=tbtn onclick=${()=>sendRhythmNow(r,i)}>Send to Synth</button>
         </div>`)}
       </div>
     </div>
@@ -138,8 +134,8 @@ async function sendEverything() {
 
 async function requestEverything() {
   const patchBanks = BANKS.length - 1;
-  const total = patchBanks * 128 + 2;
-  S.syncProgress = { done: 0, total, label: 'Patches', startedAt: Date.now() };
+  const total = patchBanks * 128;
+  S.syncProgress = { done: 0, total, label: 'Starting', startedAt: Date.now() };
   render();
   for (let b = 0; b < patchBanks; b++) {
     S.syncProgress.label = `Bank ${BANKS[b]}`;
@@ -148,13 +144,7 @@ async function requestEverything() {
       render();
     });
   }
-  S.syncProgress.label = 'Patterns';
-  requestAllPatterns();
-  S.syncProgress.done = patchBanks * 128 + 1;
-  render();
-  await new Promise(r => setTimeout(r, 200));
-  S.syncProgress.label = 'Rhythms';
-  requestAllRhythms();
   S.syncProgress.done = total;
+  S.syncProgress.label = 'Done';
   render();
 }
