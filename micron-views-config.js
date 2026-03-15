@@ -19,15 +19,17 @@ function sendNRPN(msb, lsb, val) {
   });
 }
 
-function sendTuning(cents) {
-  const v = cents + 200;
-  sendNRPN(0x00, 0x10, v);
+function sendTuning(cents) { sendNRPN(0x00, 0x10, cents + 200); }
+function sendTranspose(semi) { sendNRPN(0x00, 0x11, semi + 12); }
+function sendLocalControl(val) {
+  const map = {'on':1,'off':0,'off+send':2};
+  sendNRPN(0x00, 0x14, map[val] ?? 1);
 }
-
-function sendTranspose(semi) {
-  const v = semi + 12;
-  sendNRPN(0x00, 0x11, v);
+function sendVelocityCurve(val) {
+  const VEL_CURVES = ['linear-low','linear-med','linear-high','exp-low','exp-med','exp-high','log-low','log-med','log-high'];
+  sendNRPN(0x00, 0x15, VEL_CURVES.indexOf(val));
 }
+function sendMidiChannel(ch) { sendNRPN(0x00, 0x13, ch - 1); }
 
 export function renderConfigTab() {
   const c = S.config;
@@ -58,14 +60,14 @@ export function renderConfigTab() {
 
       <div class=config-param>
         <label>Velocity Curve</label>
-        <select onchange=${e=>{c.velocityCurveType=e.target.value;saveState();render();}}>
+        <select onchange=${e=>{c.velocityCurveType=e.target.value;sendVelocityCurve(c.velocityCurveType);saveState();render();}}>
           ${VEL_CURVES.map(v=>html`<option value=${v} selected=${c.velocityCurveType===v}>${v}</option>`)}
         </select>
       </div>
 
       <div class=config-param>
         <label>Local Control</label>
-        <select onchange=${e=>{c.localControl=e.target.value;saveState();render();}}>
+        <select onchange=${e=>{c.localControl=e.target.value;sendLocalControl(c.localControl);saveState();render();}}>
           ${LOCAL_CTRL.map(v=>html`<option value=${v} selected=${c.localControl===v}>${v}</option>`)}
         </select>
         <span class=hint-inline>${c.localControl==='off+send'?'Sends pattern notes as MIDI':''}</span>
@@ -80,7 +82,7 @@ export function renderConfigTab() {
 
       <div class=config-param>
         <label>MIDI Channel</label>
-        <input type=number min=1 max=16 value=${c.midiChannel} oninput=${e=>{c.midiChannel=Math.max(1,Math.min(16,+e.target.value));saveState();}} class=num-in />
+        <input type=number min=1 max=16 value=${c.midiChannel} oninput=${e=>{c.midiChannel=Math.max(1,Math.min(16,+e.target.value));sendMidiChannel(c.midiChannel);saveState();}} class=num-in />
         <span class=hint-inline>${c.midiSetupMode==='multi'?'Parts use ch '+c.midiChannel+' onwards':''}</span>
       </div>
 

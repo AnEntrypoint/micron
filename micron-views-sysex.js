@@ -67,6 +67,11 @@ export function renderSysExTab() {
       </div>
       <div class=section>
         <h4>Status</h4>
+        <div class=syx-counts>
+          ${[0,1,2,3].map(b=>html`<span class=syx-count-badge>${(typeof BANKS!=='undefined'?BANKS[b]:['Red','Green','Blue','Yellow'][b])}: <b>${(S.sysexBanks&&S.sysexBanks[b]||[]).filter(Boolean).length}</b></span>`)}
+          <span class=syx-count-badge>Patterns: <b>${(S.sysexPatterns||[]).filter(Boolean).length}</b></span>
+          <span class=syx-count-badge>Setups: <b>${(S.sysexSetups||[]).filter(Boolean).length}</b></span>
+        </div>
         <div class=syx-log>${S.sysexLog||'No SysEx activity yet.'}</div>
         <div class=syx-hex id=syx-hex></div>
       </div>

@@ -1,6 +1,6 @@
 import { html } from './micron-ui-core.js';
 import { S, addToLibrary, toggleFave, removeFromLibrary, saveState } from './micron-state.js';
-import { PATCH_CATEGORIES } from './micron-data.js';
+import { PATCH_CATEGORIES, BANKS } from './micron-data.js';
 import { defaultPatch, morphPatches, randomizePatch, sendAllParams, NRPN_MAP } from './micron-patch.js';
 import { parsePatchDump } from './micron-sysex.js';
 
@@ -9,14 +9,31 @@ const CAT_ICONS = ['🕐','⭐','🎸','🎵','🌊','🎻','🎺','🎹','🥁'
 let render = ()=>{};
 export function setRender(fn) { render=fn; }
 let _saveName = null;
+let _importToast = null;
+
+if (!S.libraryMode) S.libraryMode = 'local';
 
 export function renderLibraryTab() {
+  const isSynth = S.libraryMode === 'synth';
+  return html`<div>
+    <div class=lib-toolbar>
+      <div class=lib-mode-toggle>
+        <button class=${'tbtn'+(S.libraryMode==='local'?' active':'')} onclick=${()=>{S.libraryMode='local';render();}}>Local Library</button>
+        <button class=${'tbtn'+(S.libraryMode==='synth'?' active':'')} onclick=${()=>{S.libraryMode='synth';render();}}>Synth Banks</button>
+      </div>
+    </div>
+    ${_importToast ? html`<div class=import-toast>${_importToast}</div>` : null}
+    ${isSynth ? renderSynthBanks() : renderLocalLibrary()}
+    ${!isSynth ? renderABSection() : null}
+  </div>`;
+}
+
+function renderLocalLibrary() {
   const items = S.library.filter(p=>{
     const matchName = !S.libraryFilter || p.name.toLowerCase().includes(S.libraryFilter.toLowerCase());
     const matchCat = S.libraryCat<0 || p.category===S.libraryCat;
     return matchName && matchCat;
   });
-
   return html`<div>
     <div class=lib-toolbar>
       <input placeholder="Search patches..." value=${S.libraryFilter} oninput=${e=>{S.libraryFilter=e.target.value;render();}} class=search-in />
@@ -47,7 +64,37 @@ export function renderLibraryTab() {
         </div>
       </div>`)}
     </div>
-    ${renderABSection()}
+  </div>`;
+}
+
+function renderSynthBanks() {
+  const banks = S.sysexBanks || [];
+  const bank = banks[S.sysexSelectedBank] || [];
+  const filter = S.sysexBankFilter || '';
+  return html`<div>
+    <div class=lib-toolbar style="flex-wrap:wrap;gap:4px">
+      <div class=bank-selector>
+        ${(typeof BANKS !== 'undefined' ? BANKS : ['Red','Green','Blue','Yellow']).map((b,i)=>html`<button
+          class=${'tbtn'+(S.sysexSelectedBank===i?' active':'')}
+          onclick=${()=>{S.sysexSelectedBank=i;render();}}
+        >${b} (${(banks[i]||[]).filter(Boolean).length}/128)</button>`)}
+      </div>
+      <input placeholder="Search bank..." value=${filter} oninput=${e=>{S.sysexBankFilter=e.target.value;render();}} class=search-in style="margin-bottom:0" />
+    </div>
+    <div class=bank-grid style="max-height:400px">
+      ${bank.map((p,i)=>{
+        if (filter && p && !p.name.toLowerCase().includes(filter.toLowerCase())) return null;
+        if (!p) return html`<div class=bank-cell title=${'Slot '+(i+1)}><span class=bc-num>${i+1}</span><span class=bc-name style="color:var(--text3)">—</span></div>`;
+        return html`<div class='bank-cell loaded' title=${p.name}>
+          <span class=bc-num>${i+1}</span>
+          <span class=bc-name>${p.name}</span>
+          <div class=bc-btns>
+            <button class=tbtn style="font-size:9px;padding:2px 5px;min-height:22px" onclick=${e=>{e.stopPropagation();loadBankPatchLib(p,i);}}>Load</button>
+            <button class="tbtn accent" style="font-size:9px;padding:2px 5px;min-height:22px" onclick=${e=>{e.stopPropagation();editBankPatchLib(p,i);}}>Edit</button>
+          </div>
+        </div>`;
+      })}
+    </div>
   </div>`;
 }
 
@@ -129,22 +176,53 @@ function importSysexToLibrary() {
     const reader = new FileReader();
     reader.onload = ev => {
       const data = new Uint8Array(ev.target.result);
-      let i = 0;
+      let i = 0, count = 0;
       while (i < data.length) {
         if (data[i] === 0xF0) {
           let end = data.indexOf(0xF7, i);
           if (end < 0) break;
           const msg = data.slice(i, end+1);
           const parsed = parsePatchDump(msg);
-          if (parsed) addToLibrary(parsed.name, parsed.params, parsed.params.category||0);
+          if (parsed) {
+            addToLibrary(parsed.name, parsed.params, parsed.params.category||0);
+            const b = parsed.bank ?? 0, sl = parsed.slot ?? 0;
+            if (!S.sysexBanks) S.sysexBanks = [Array(128).fill(null),Array(128).fill(null),Array(128).fill(null),Array(128).fill(null)];
+            if (b >= 0 && b < 4 && sl >= 0 && sl < 128) S.sysexBanks[b][sl] = {name: parsed.name, params: parsed.params, raw: Array.from(msg)};
+            count++;
+          }
           i = end + 1;
         } else { i++; }
       }
+      showToast(`Imported ${count} patch${count!==1?'es':''}`);
       render();
     };
     reader.readAsArrayBuffer(file);
   };
   input.click();
+}
+
+function showToast(msg) {
+  _importToast = msg;
+  render();
+  setTimeout(() => { _importToast = null; render(); }, 3000);
+}
+
+function loadBankPatchLib(p, i) {
+  import('./micron-patch.js').then(({defaultPatch, sendAllParams}) => {
+    import('./micron-sysex.js').then(({parsePatchDump}) => {
+      let params = p.params;
+      if (p.raw) { const parsed = parsePatchDump(new Uint8Array(p.raw)); if (parsed) params = parsed.params; }
+      S.patch = {...defaultPatch(), ...params};
+      sendAllParams(S.patch);
+      render();
+    });
+  });
+}
+
+function editBankPatchLib(p, i) {
+  loadBankPatchLib(p, i);
+  S.tab = 'patch';
+  render();
 }
 
 function exportLibrary() {

@@ -2,6 +2,7 @@ import { html } from './micron-ui-core.js';
 import { S } from './micron-state.js';
 import { ARP_PATTERNS,ARP_ORDERS,ARP_MULTS,ARP_MODES,ARP_SPANS,TEMPO_SYNC_RATES,ENV_SLOPES,ENV_LOOPS,ENV_RESETS,PORTAMENTO_TYPES,PORTAMENTO_MODES,PITCH_BEND_MODES,UNISON_VOICES,PATCH_CATEGORIES,NOISE_TYPES,WAVE_NAMES,OCT_LABELS,SEMI_LABELS,envMs,lfoHz } from './micron-data.js';
 import { sp, pRow, pSel, sec, filterTab, fxTab, modTab, trackTab } from './micron-views-patch2.js';
+import { NRPN_MAP } from './micron-patch.js';
 
 const PATCH_TABS = ['Voice','OSC','Mix','Filter','Env','LFO','FX','Mod','Track','Output'];
 
@@ -115,10 +116,40 @@ function outputTab() {
 
 const TAB_RENDERERS = {Voice:voiceTab,OSC:oscTab,Mix:mixTab,Filter:filterTab,Env:envTab,LFO:lfoTab,FX:fxTab,Mod:modTab,Track:trackTab,Output:outputTab};
 
+const PARAM_TAB_MAP = {
+  Voice:['polyMode','unison','unisonVoices','unisonDetune','portamento','portaType','portaTime','portaMode','pitchBendMode','analogDrift','category','arpMode','arpPattern','arpMult','arpLength','arpOctRange','arpSpan','arpOrder','arpTempo'],
+  OSC:['osc1Wave','osc1Shape','osc1Oct','osc1Semi','osc1Fine','osc1PBRange','osc2Wave','osc2Shape','osc2Oct','osc2Semi','osc2Fine','osc2PBRange','osc3Wave','osc3Shape','osc3Oct','osc3Semi','osc3Fine','osc3PBRange'],
+  Mix:['osc1Level','osc2Level','osc3Level','ringLevel','extInLevel','noiseLevel','osc1Bal','osc2Bal','osc3Bal','ringBal','noiseBal','extInBal','noiseType','f1ToF2'],
+  Filter:['f1Type','f1Cutoff','f1Res','f1EnvAmt','f1Keytrk','f1Polarity','f1Level','f1Pan','f2Type','f2Cutoff','f2Res','f2EnvAmt','f2Keytrk','f2OffsetType','f2OffsetFreq','f2Level','f2Pan','unfiltLevel','unfiltSrc','unfiltPan'],
+  Env:['e1AtkTime','e1AtkSlope','e1DecTime','e1DecSlope','e1SusLevel','e1RelTime','e1RelSlope','e1Vel','e1Loop','e1Reset','e1Freerun','e1Pedal','e2AtkTime','e2DecTime','e2SusLevel','e2RelTime','e2Vel','e3AtkTime','e3DecTime','e3SusLevel','e3RelTime','e3Vel'],
+  LFO:['lfo1Rate','lfo1Sync','lfo1SyncRate','lfo1Reset','lfo1M1','lfo2Rate','lfo2Sync','lfo2SyncRate','lfo2Reset','lfo2M1','shRate','shSync','shSyncRate','shReset','shSmooth'],
+  FX:['fx1Type','fx1Mix','fx1PA','fx1PB','fx1PC','fx1PD','fx1PE','fx1PF','fx1PG','fx1PH','fx2Type','fx2Balance','fx2PA','fx2PB','fx2PC','fx2PD','fx2PE','fx2PF','driveType','driveLevel'],
+  Mod:Array.from({length:12},(_,i)=>[`mod${i+1}Src`,`mod${i+1}Dst`,`mod${i+1}Lvl`,`mod${i+1}Off`]).flat(),
+  Track:['trkInput','trkPoints','trkPreset'],
+  Output:['outputLevel','patchName','knobX','knobY','knobZ'],
+};
+
+function renderSearchResults(query) {
+  const q = query.toLowerCase();
+  const results = [];
+  for (const [tabName, keys] of Object.entries(PARAM_TAB_MAP)) {
+    const matched = keys.filter(k => k.toLowerCase().includes(q));
+    if (!matched.length) continue;
+    results.push(html`<div>
+      <div class=search-tab-label>${tabName}</div>
+      ${matched.map(k => pRow(k, k, (NRPN_MAP[k]?.min??0), (NRPN_MAP[k]?.max??127)))}
+    </div>`);
+  }
+  return results.length
+    ? html`<div class=search-results>${results}</div>`
+    : html`<div class=no-results>No params matching "${query}"</div>`;
+}
+
 export function renderPatchTab() {
+  const q = S.paramSearch || '';
   return html`<div>
-    <div class=ptabs>${PATCH_TABS.map(t=>html`<button class=${'tbtn'+(S.patchTab===t?' active':'')} onclick=${()=>{S.patchTab=t;window._micronRender?.();}}>${t}</button>`)}</div>
-    <input placeholder="Search params..." value=${S.paramSearch||''} oninput=${e=>{S.paramSearch=e.target.value;window._micronRender?.();}} class="search-in psearch" />
-    ${(TAB_RENDERERS[S.patchTab]||voiceTab)()}
+    <div class=ptabs>${PATCH_TABS.map(t=>html`<button class=${'tbtn'+(S.patchTab===t?' active':'')} onclick=${()=>{S.patchTab=t;S.paramSearch='';window._micronRender?.();}}>${t}</button>`)}</div>
+    <input placeholder="Search all params..." value=${q} oninput=${e=>{S.paramSearch=e.target.value;window._micronRender?.();}} class="search-in psearch" />
+    ${q ? renderSearchResults(q) : (TAB_RENDERERS[S.patchTab]||voiceTab)()}
   </div>`;
 }

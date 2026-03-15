@@ -94,18 +94,42 @@ function sendCurrentPattern() {
   sendPatternSysEx(pat(), slot);
 }
 
+let _chainDragIdx = null;
+let _chainDragOver = null;
+
 function renderSongChain() {
   return html`<div class=section>
-    <h4>Song Chain</h4>
-    <div class=chain-row>
-      ${S.songChain.map((idx,i)=>html`<span class=${'chain-slot filled'+(i===S.songPos?' cursor':'')} title=${'Pat '+(idx+1)}>
-        ${idx+1}
-        <button class=chain-rm onclick=${()=>{S.songChain.splice(i,1);saveState();render();}}>×</button>
-      </span>`)}
-      <button class=tbtn onclick=${()=>addToChain()}>+ Add</button>
-      <button class="tbtn warn" onclick=${()=>{S.songChain=[];S.songPos=0;saveState();render();}}>Clear</button>
+    <h4>Pattern Chain</h4>
+    <div class=chain-visual>
+      ${S.songChain.length === 0
+        ? html`<div class=chain-empty>No patterns in chain. Click pattern cards to add.</div>`
+        : S.songChain.map((idx,i)=>html`<div
+          class=${'chain-block'+(i===S.songPos?' cursor':'')+(i===_chainDragOver?' drag-over':'')}
+          draggable=true
+          ondragstart=${()=>{_chainDragIdx=i;}}
+          ondragover=${e=>{e.preventDefault();_chainDragOver=i;render();}}
+          ondragleave=${()=>{_chainDragOver=null;render();}}
+          ondrop=${()=>{
+            if(_chainDragIdx!==null&&_chainDragIdx!==i){
+              const item=S.songChain.splice(_chainDragIdx,1)[0];
+              S.songChain.splice(i,0,item);
+              saveState();
+            }
+            _chainDragIdx=null;_chainDragOver=null;render();
+          }}
+          title=${'Pat '+(idx+1)+': '+S.patterns[idx]?.name}
+        >
+          <span class=chain-block-num>${idx+1}</span>
+          <span class=chain-block-name>${S.patterns[idx]?.name||''}</span>
+          <button class=chain-rm onclick=${e=>{e.stopPropagation();S.songChain.splice(i,1);saveState();render();}}>×</button>
+        </div>`)
+      }
     </div>
-    <div class=pr>
+    <div class=chain-row style="margin-top:4px">
+      <button class=tbtn onclick=${()=>addToChain()}>+ Add Current (Pat ${S.patIdx+1})</button>
+      <button class="tbtn warn" onclick=${()=>{S.songChain=[];S.songPos=0;saveState();render();}}>Clear Chain</button>
+    </div>
+    <div class=pr style="margin-top:4px">
       <button class=tbtn onclick=${()=>exportPatternsJSON()}>Export Patterns JSON</button>
       <button class=tbtn onclick=${()=>importPatternsJSON()}>Import Patterns JSON</button>
     </div>

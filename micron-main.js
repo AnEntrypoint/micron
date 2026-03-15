@@ -101,18 +101,59 @@ function startResize(e) {
   document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',up);
 }
 
+let _editingName = false;
+let _nameEditVal = '';
+
+function doTap() {
+  const now = Date.now();
+  S.tapTimes = [...(S.tapTimes||[]), now].slice(-6);
+  if (S.tapTimes.length >= 2) {
+    const intervals = S.tapTimes.slice(1).map((t,i)=>t-S.tapTimes[i]);
+    const avg = intervals.reduce((a,b)=>a+b,0)/intervals.length;
+    S.bpm = Math.max(20, Math.min(300, Math.round(60000/avg)));
+    setClockSend(M.sendClock, S.bpm);
+  }
+  schedRender();
+}
+
+function doUndo() {
+  import('./micron-state.js').then(m=>{const u=m.popUndo();if(u){S.patch=u;import('./micron-patch.js').then(p=>p.sendAllParams(S.patch));schedRender();}});
+}
+
 function renderToolbar() {
   const patchName = S.patch.patchName || 'Untitled';
+  const undoCount = S.undoStack?.length || 0;
+  const abSlotA = S.abPatch?.[0];
+  const abSlotB = S.abPatch?.[1];
   return html`<div id=toolbar>
     <span class=brand>ALESIS <span>MICRON</span></span>
     <span class=sep></span>
     <button class=tbtn onclick=${()=>{S.bpm=Math.max(20,S.bpm-1);setClockSend(M.sendClock,S.bpm);schedRender();}}>−</button>
     <input type=number class=bpm-in min=20 max=300 value=${S.bpm} oninput=${e=>{S.bpm=+e.target.value;setClockSend(M.sendClock,S.bpm);schedRender();}} />
     <button class=tbtn onclick=${()=>{S.bpm=Math.min(300,S.bpm+1);setClockSend(M.sendClock,S.bpm);schedRender();}}>+</button>
+    <button class=tbtn onclick=${doTap} title="Tap tempo">TAP</button>
     <button class=${'tbtn'+(S.playing?' stop':' play')} onclick=${()=>togglePlay()}>${S.playing?'■ Stop':'▶ Play'}</button>
     <span class=sep></span>
-    <button class=patch-name-btn onclick=${()=>{S.tab='patch';schedRender();}} title="Edit patch">${patchName}</button>
+    ${_editingName
+      ? html`<input class=patch-name-edit autofocus value=${_nameEditVal}
+          oninput=${e=>{_nameEditVal=e.target.value;}}
+          onblur=${()=>{S.patch.patchName=_nameEditVal;S.unsaved=true;_editingName=false;schedRender();}}
+          onkeydown=${e=>{if(e.key==='Enter'||e.key==='Escape'){S.patch.patchName=_nameEditVal;S.unsaved=true;_editingName=false;schedRender();}}} />`
+      : html`<button class=patch-name-btn
+          onclick=${()=>{S.tab='patch';schedRender();}}
+          ondblclick=${e=>{e.preventDefault();_editingName=true;_nameEditVal=patchName;schedRender();}}
+          title="Click=edit patch, dblclick=rename">${patchName}</button>`}
     <span class=sep></span>
+    <button class=${'tbtn ab-slot-btn'+(S.abSlot===0?' active':'')}
+      onclick=${()=>{if(S.abPatch[0]){S.abSlot=0;S.patch={...S.abPatch[0].patch};import('./micron-patch.js').then(p=>p.sendAllParams(S.patch));schedRender();}else{S.abPatch[0]={id:Date.now(),name:patchName,patch:{...S.patch}};schedRender();}}}
+      title=${abSlotA?'A: '+abSlotA.name+' (click to load)':'Click to save current to A'}
+    >A${abSlotA?' ✓':''}</button>
+    <button class=${'tbtn ab-slot-btn'+(S.abSlot===1?' active':'')}
+      onclick=${()=>{if(S.abPatch[1]){S.abSlot=1;S.patch={...S.abPatch[1].patch};import('./micron-patch.js').then(p=>p.sendAllParams(S.patch));schedRender();}else{S.abPatch[1]={id:Date.now(),name:patchName,patch:{...S.patch}};schedRender();}}}
+      title=${abSlotB?'B: '+abSlotB.name+' (click to load)':'Click to save current to B'}
+    >B${abSlotB?' ✓':''}</button>
+    <span class=sep></span>
+    ${undoCount > 0 ? html`<button class=tbtn onclick=${doUndo} title="Undo (${undoCount} steps)">↩ ${undoCount}</button>` : null}
     <span class=${'midi-dot'+(M.rxFlash?' rx':M.output?' ok':'')}></span>
     <span class=midi-name>${M.output?.name?.slice(0,14)||'No MIDI'}</span>
     ${S.bgSyncProgress && S.bgSyncProgress.done < S.bgSyncProgress.total
@@ -120,6 +161,7 @@ function renderToolbar() {
       : null}
     <span class=sep></span>
     <button class="tbtn panic-btn" onclick=${()=>{allNotesOff();schedRender();}} title="All Notes Off">PANIC</button>
+    <button class=tbtn onclick=${()=>{S.shortcutsVisible=!S.shortcutsVisible;schedRender();}} title="Keyboard shortcuts">?</button>
     <span class=sep></span>
     <button class=tbtn onclick=${()=>{S.theme=S.theme==='light'?'dark':'light';document.body.className=S.theme==='light'?'light':'';saveState();schedRender();}}>${S.theme==='light'?'Dark':'Light'}</button>
     <button class=tbtn onclick=${()=>saveState()}>Save</button>
@@ -144,6 +186,33 @@ function renderBottomNav() {
 
 const TAB_VIEWS = {seq:renderSeqTab,patch:renderPatchTab,patterns:renderPatternsTab,rhythm:renderRhythmTab,midi:renderMIDITab,sysex:renderSysExTab,config:renderConfigTab,standalone:renderStandaloneTab,library:renderLibraryTab};
 
+function renderShortcutsModal() {
+  if (!S.shortcutsVisible) return null;
+  const shortcuts = [
+    ['Space','Play / Stop'],
+    ['ArrowRight','Move cursor right'],
+    ['ArrowLeft','Move cursor left'],
+    ['Ctrl+Z','Undo'],
+    ['Swipe left/right','Switch tabs (mobile)'],
+    ['Double-click patch name','Rename patch inline'],
+    ['Right-click drum step','Set step velocity'],
+    ['Long-press drum step','Set step velocity (touch)'],
+    ['TAP button','Tap tempo (4+ taps)'],
+    ['A / B buttons','Save/load A-B compare slots'],
+    ['↩ N button','Undo N steps'],
+    ['? button','Show this cheatsheet'],
+  ];
+  return html`<div class=overlay style="display:flex" onclick=${e=>{if(e.target.className.includes('overlay')){S.shortcutsVisible=false;schedRender();}}}>
+    <div class=overlay-box>
+      <h3>Keyboard Shortcuts</h3>
+      <table class=shortcuts-table>
+        ${shortcuts.map(([k,v])=>html`<tr><td class=sk-key>${k}</td><td class=sk-desc>${v}</td></tr>`)}
+      </table>
+      <button class=tbtn onclick=${()=>{S.shortcutsVisible=false;schedRender();}} style="margin-top:12px">Close</button>
+    </div>
+  </div>`;
+}
+
 function doRender() {
   const view = TAB_VIEWS[S.tab] || renderSeqTab;
   const vnode = html`<div id=app>
@@ -151,6 +220,7 @@ function doRender() {
     ${renderTabsBar()}
     <div id=panel>${view()}</div>
     ${renderBottomNav()}
+    ${renderShortcutsModal()}
   </div>`;
   applyDiff(document.getElementById('app'), vnode);
   if (S.tab==='seq') requestAnimationFrame(()=>drawRoll(rollCanvas,velCanvas));
