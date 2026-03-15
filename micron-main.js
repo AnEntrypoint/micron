@@ -115,6 +115,9 @@ function renderToolbar() {
     <span class=sep></span>
     <span class=${'midi-dot'+(M.rxFlash?' rx':M.output?' ok':'')}></span>
     <span class=midi-name>${M.output?.name?.slice(0,14)||'No MIDI'}</span>
+    ${S.bgSyncProgress && S.bgSyncProgress.done < S.bgSyncProgress.total
+      ? html`<span class=bg-sync-indicator>↓ ${S.bgSyncProgress.done}/${S.bgSyncProgress.total}</span>`
+      : null}
     <span class=sep></span>
     <button class="tbtn panic-btn" onclick=${()=>{allNotesOff();schedRender();}} title="All Notes Off">PANIC</button>
     <span class=sep></span>
@@ -180,8 +183,38 @@ document.addEventListener('touchend', e => {
   }
 }, {passive:true});
 
+function patchCount() {
+  if (!S.sysexBanks) return 0;
+  return S.sysexBanks.slice(0, 4).reduce((n, b) => n + b.filter(Boolean).length, 0);
+}
+
+let _bgSyncing = false;
+async function syncFromSynth() {
+  if (!M.output) return;
+  const { requestPatch, requestBankIndividual } = await import('./micron-sysex.js');
+  S._lastReqBank = 4; S._lastReqSlot = 0;
+  requestPatch(4, 0);
+  schedRender();
+  if (_bgSyncing || patchCount() >= 100) return;
+  _bgSyncing = true;
+  const total = 512;
+  S.bgSyncProgress = { done: 0, total };
+  schedRender();
+  for (let b = 0; b < 4; b++) {
+    await requestBankIndividual(S, b, s => {
+      S.bgSyncProgress = { done: b * 128 + Math.min(s, 128), total };
+      schedRender();
+    });
+  }
+  S.bgSyncProgress = null;
+  _bgSyncing = false;
+  schedRender();
+}
+
 loadState();
 const attachMidi = () => M.access?.inputs.forEach(i=>{ i.onmidimessage=handleMidiMsg; });
-initMIDI(()=>{ attachMidi(); schedRender(); }).then(ok=>{ if(ok) attachMidi(); schedRender(); });
+let _syncCalled = false;
+function syncOnce() { if (!_syncCalled) { _syncCalled = true; syncFromSynth(); } }
+initMIDI(()=>{ attachMidi(); syncOnce(); schedRender(); }).then(ok=>{ if(ok){ attachMidi(); syncOnce(); } schedRender(); });
 setInterval(()=>{ if(S.unsaved) saveState(); }, 30000);
 doRender();

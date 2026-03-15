@@ -87,6 +87,7 @@ export const S = {
   config: defaultConfig(),
   standaloneSlots: {},
   sendProgress: null,
+  bgSyncProgress: null,
   sysexLog: '',
   midiMonitor: [],
   lockedParams: {},

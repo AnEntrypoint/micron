@@ -49,7 +49,7 @@ export function renderStandaloneTab() {
       </div>` : null}
       ${S.syncProgress?.startedAt ? html`<div class=hint>Last backup: ${new Date(S.syncProgress.startedAt).toLocaleTimeString()}</div>` : null}
       <div class=btn-group>
-        <button class=${'tbtn'+(syncing?' disabled':'')} onclick=${()=>requestEverything()}>Backup All Patches</button>
+        <button class=${'tbtn'+(syncing?' disabled':'')} onclick=${()=>requestEverything()}>Force Re-sync</button>
         <button class=tbtn onclick=${()=>{S.syncProgress=null;render();}}>Clear</button>
       </div>
     </div>

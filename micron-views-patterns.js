@@ -53,6 +53,7 @@ export function renderPatternsTab() {
       </div>
     </div>
     ${renderSongChain()}
+    ${renderFromSynth()}
   </div>`;
 }
 
@@ -123,6 +124,38 @@ function exportPatternsJSON() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href=url; a.download='micron-patterns.json'; a.click();
   URL.revokeObjectURL(url);
+}
+
+function renderFromSynth() {
+  const entries = (S.sysexPatterns || []).map((p, i) => p ? {p, i} : null).filter(Boolean);
+  return html`<div class=section>
+    <h4>From Synth</h4>
+    ${entries.length === 0
+      ? html`<div class=hint>No patterns received from synth yet. On Micron: [patterns] → select → push knob → "Send MIDI sysex?"</div>`
+      : html`<div class=standalone-list>
+          ${entries.map(({p, i}) => html`<div class=standalone-slot>
+            <span class=slot-name>${p.name || `Pattern ${i+1}`}</span>
+            <span class=slot-info>slot ${i}</span>
+            <button class=tbtn onclick=${() => loadSynthPattern(i)}>Load</button>
+          </div>`)}
+        </div>`}
+  </div>`;
+}
+
+function loadSynthPattern(i) {
+  const p = S.sysexPatterns?.[i];
+  if (!p) return;
+  import('./micron-sysex.js').then(({parsePatternDump}) => {
+    const parsed = parsePatternDump(new Uint8Array(p.raw));
+    if (parsed) {
+      while (S.patterns.length <= i) S.patterns.push({name:`Pat ${S.patterns.length+1}`,len:16,grid:0.0625,type:'seq',steps:Array.from({length:64},()=>({notes:[],len:0.0625,prob:100}))});
+      S.patterns[i] = {name: p.name, len: parsed.len, grid: parsed.grid, type: parsed.type, steps: parsed.steps};
+    } else {
+      while (S.patterns.length <= i) S.patterns.push({name:`Pat ${S.patterns.length+1}`,len:16,grid:0.0625,type:'seq',steps:Array.from({length:64},()=>({notes:[],len:0.0625,prob:100}))});
+      S.patterns[i] = {...S.patterns[i], name: p.name};
+    }
+    saveState(); render();
+  });
 }
 
 function importPatternsJSON() {

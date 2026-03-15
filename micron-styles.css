@@ -28,6 +28,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'JetBra
 .midi-dot{width:8px;height:8px;border-radius:50%;background:var(--border);display:inline-block;transition:all .2s;flex-shrink:0}
 .midi-dot.ok{background:var(--green);box-shadow:0 0 5px var(--green)}.midi-dot.rx{background:var(--orange);box-shadow:0 0 8px var(--orange)}
 .midi-name{font-size:11px;color:var(--text2);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bg-sync-indicator{font-size:10px;color:var(--cyan);opacity:.8;white-space:nowrap;animation:syncpulse 1.5s infinite}
+@keyframes syncpulse{0%,100%{opacity:.5}50%{opacity:1}}
 input[type=checkbox]{appearance:none;-webkit-appearance:none;width:16px;height:16px;border:1px solid var(--border);border-radius:3px;background:var(--panel2);cursor:pointer;vertical-align:middle;position:relative;flex-shrink:0}
 input[type=checkbox]:checked{background:var(--cyan);border-color:var(--cyan)}
 input[type=checkbox]:checked::after{content:'';position:absolute;top:2px;left:5px;width:4px;height:8px;border:2px solid var(--bg);border-top:none;border-left:none;transform:rotate(45deg)}

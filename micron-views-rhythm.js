@@ -58,6 +58,7 @@ export function renderRhythmTab() {
       ${r.drums.map((drum,di)=>renderDrumRow(drum,di,r))}
       ${r.drums.length < 10 ? html`<button class=tbtn onclick=${()=>addDrum()}>+ Add Drum</button>` : null}
     </div>
+    ${renderFromSynth()}
     <div class=section>
       <h4>SysEx</h4>
       <div class=btn-group>
@@ -178,4 +179,36 @@ function sendToMicron() {
 
 function requestFromMicron() {
   requestRhythm(S.rhythmSysexSlot || 0);
+}
+
+function renderFromSynth() {
+  const entries = (S.sysexSetups || []).map((s, i) => s ? {s, i} : null).filter(Boolean);
+  return html`<div class=section>
+    <h4>From Synth</h4>
+    ${entries.length === 0
+      ? html`<div class=hint>No rhythms received from synth yet. On Micron: [rhythms] → select → push knob → "Send MIDI sysex?"</div>`
+      : html`<div class=standalone-list>
+          ${entries.map(({s, i}) => html`<div class=standalone-slot>
+            <span class=slot-name>${s.name || `Setup ${i+1}`}</span>
+            <span class=slot-info>slot ${i}</span>
+            <button class=tbtn onclick=${() => loadSynthRhythm(i)}>Load</button>
+          </div>`)}
+        </div>`}
+  </div>`;
+}
+
+function loadSynthRhythm(i) {
+  const entry = S.sysexSetups?.[i];
+  if (!entry) return;
+  import('./micron-sysex.js').then(({parseRhythmDump}) => {
+    const parsed = parseRhythmDump(new Uint8Array(entry.raw));
+    while (S.rhythms.length <= i) S.rhythms.push(defaultRhythm());
+    if (parsed) {
+      S.rhythms[i] = {name: entry.name, len: parsed.len, grid: parsed.grid, drums: parsed.drums};
+    } else {
+      S.rhythms[i] = {...S.rhythms[i], name: entry.name};
+    }
+    S.rhythmIdx = i;
+    saveState(); render();
+  });
 }
