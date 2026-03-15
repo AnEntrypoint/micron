@@ -84,7 +84,6 @@ export function requestBank(bank) {
 
 export function parsePatchDump(data) {
   if (data[1]!==0x00||data[2]!==0x00||data[3]!==0x0E||data[4]!==0x22) return null;
-  const opcode = data[5];
   const bank = data[6] & 0x0F;
   const slot = data[8] & 0x7F;
   const raw = Array.from(data).slice(9, data.length - 1);

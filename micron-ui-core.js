@@ -23,7 +23,6 @@ export const TABS = [
   {id:'patch', label:'Patch', icon:'◎'},
   {id:'patterns', label:'Patterns', icon:'▤'},
   {id:'rhythm', label:'Rhythm', icon:'♥'},
-  {id:'perf', label:'Perform', icon:'♪'},
   {id:'midi', label:'MIDI', icon:'⟵'},
   {id:'sysex', label:'SysEx', icon:'⬡'},
   {id:'config', label:'Config', icon:'⚙'},

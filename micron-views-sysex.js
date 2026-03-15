@@ -102,7 +102,7 @@ export function handleSysEx(data) {
   S.sysexLog = `Rx: [${data.length}b] ${hex.slice(0,120)}...`;
   if (!(data[1]===0x00&&data[2]===0x00&&data[3]===0x0E&&data[4]===0x22)) { render(); return; }
   const content = data[5];
-  if (content === 0x41 || content === 1) {
+  if (content === 1) {
     const parsed = parsePatchDump(data);
     if (parsed) {
       const slot = parsed.slot;

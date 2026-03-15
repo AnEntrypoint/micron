@@ -7,13 +7,12 @@ import { handleSysEx as sysexHandler, renderSysExTab, setRender as sysexSetRende
 import { renderPatchTab } from './micron-views-patch.js';
 import { renderPatternsTab, setRender as patSetRender } from './micron-views-patterns.js';
 import { renderMIDITab, setRender as midiSetRender } from './micron-views-midi.js';
-import { renderPerfTab, setRender as perfSetRender } from './micron-views-perf.js';
 import { renderLibraryTab, setRender as libSetRender } from './micron-views-library.js';
 import { renderRhythmTab, setRender as rhythmSetRender } from './micron-views-rhythm.js';
 import { renderConfigTab, setRender as configSetRender } from './micron-views-config.js';
 import { renderStandaloneTab, setRender as standaloneSetRender } from './micron-views-standalone.js';
 import { drawRoll, schedulePlayback, initRoll } from './micron-sequencer.js';
-import { initGamepad, playNote, releaseNote, tapTempo } from './micron-perf.js';
+import { initGamepad, playNote, releaseNote } from './micron-perf.js';
 import { noteColor, isBlack, NOTE_NAMES, velColor, stepFracLabel } from './micron-data.js';
 import { TABS, render as schedRender, setRenderFn } from './micron-ui-core.js';
 const BASE_KEYS = {q:60,w:62,e:64,r:65,t:67,y:69,u:71,i:72,o:74,p:76,a:48,s:50,d:52,f:53,g:55,h:57,j:59,'2':61,'3':63,'5':66,'6':68,'7':70};
@@ -39,19 +38,6 @@ window._midiHandler = handleMidiMsg;
 function renderSeqTab() {
   const p = pat();
   return html`<div>
-    <div class=seq-controls>
-      <span class=brand>BPM</span>
-      <input type=number class=bpm-in min=20 max=300 value=${S.bpm} oninput=${e=>{S.bpm=+e.target.value;setClockSend(M.sendClock,S.bpm);schedRender();}} />
-      <button class=${'tbtn'+(S.playing?' stop':' play')} onclick=${()=>togglePlay()}>▶ ${S.playing?'Stop':'Play'}</button>
-      <button class=${'tbtn rec'+(S.recording?' on':'')} onclick=${()=>{S.recording=!S.recording;schedRender();}}>⏺</button>
-      <button class=${'tbtn'+(S.loop?' active':'')} onclick=${()=>{S.loop=!S.loop;schedRender();}}>↩</button>
-      <button class=${'tbtn'+(S.metronome?' active':'')} onclick=${()=>{S.metronome=!S.metronome;schedRender();}}>♩</button>
-      <button class="tbtn" onclick=${()=>{S.octaveShift=Math.max(-3,S.octaveShift-1);schedRender();}}>Oct▼</button>
-      <span class=pos-display>Oct ${S.octaveShift>0?'+':''}${S.octaveShift}</span>
-      <button class="tbtn" onclick=${()=>{S.octaveShift=Math.min(3,S.octaveShift+1);schedRender();}}>Oct▲</button>
-      <span class=pos-display>${S.barBeat+1}/${p.len}</span>
-      ${S.unsaved?html`<span class=unsaved-ind>●</span>`:null}
-    </div>
     <div class=roll-container style=${'height:'+S.rollH+'px'}>
       <canvas id=roll-canvas style="width:100%;height:100%;display:block" ref=${el=>{if(el&&el!==rollCanvas){rollCanvas=el;initRoll(rollCanvas,velCanvas);setupCanvas(el);}}}></canvas>
     </div>
@@ -60,10 +46,15 @@ function renderSeqTab() {
     <div class=seq-controls>
       ${[8,12,16,24,32,48,64].map(l=>html`<button class=${'slen-btn'+(p.len===l?' active':'')} onclick=${()=>{changeLen(l);}}>L${l}</button>`)}
       <span class=sep></span>
+      <button class=${'tbtn'+(S.loop?' active':'')} onclick=${()=>{S.loop=!S.loop;schedRender();}}>↩</button>
+      <button class=${'tbtn'+(S.metronome?' active':'')} onclick=${()=>{S.metronome=!S.metronome;schedRender();}}>♩</button>
+      <span class=pos-display>${S.barBeat+1}/${p.len}</span>
+      <span class=sep></span>
       <span>Swing:</span>
       <input type=range min=0 max=50 value=${S.swingAmt} oninput=${e=>{S.swingAmt=+e.target.value;schedRender();}} class=rs style="max-width:80px" />
       <span class=pv>${S.swingAmt}%</span>
       <button class=tbtn onclick=${()=>clearPat()}>Clear</button>
+      ${S.unsaved?html`<span class=unsaved-ind>●</span>`:null}
     </div>
     ${renderStepGrid()}
   </div>`;
@@ -126,10 +117,10 @@ function renderToolbar() {
     <button class=tbtn onclick=${()=>{S.octaveShift=Math.min(3,S.octaveShift+1);schedRender();}}>Oct▶</button>
     <span class=sep></span>
     <span class=${'midi-dot'+(M.rxFlash?' rx':M.output?' ok':'')}></span>
-    <span style="font-size:9px;color:var(--text2)">${M.output?.name?.slice(0,12)||'No MIDI'}</span>
+    <span class=midi-name>${M.output?.name?.slice(0,14)||'No MIDI'}</span>
     <span class=sep></span>
-    <button class=${'tbtn'+(S.theme==='light'?'':'')} onclick=${()=>{S.theme=S.theme==='light'?'dark':'light';document.body.className=S.theme==='light'?'light':'';saveState();schedRender();}}>☀</button>
-    <button class=tbtn onclick=${()=>saveState()}>💾</button>
+    <button class=tbtn onclick=${()=>{S.theme=S.theme==='light'?'dark':'light';document.body.className=S.theme==='light'?'light':'';saveState();schedRender();}}>${S.theme==='light'?'Dark':'Light'}</button>
+    <button class=tbtn onclick=${()=>saveState()}>Save</button>
     ${S.unsaved?html`<span class=unsaved-ind>●</span>`:null}
   </div>`;
 }
@@ -149,7 +140,7 @@ function renderBottomNav() {
   </div>`;
 }
 
-const TAB_VIEWS = {seq:renderSeqTab,patch:renderPatchTab,patterns:renderPatternsTab,rhythm:renderRhythmTab,midi:renderMIDITab,perf:renderPerfTab,sysex:renderSysExTab,config:renderConfigTab,standalone:renderStandaloneTab,library:renderLibraryTab};
+const TAB_VIEWS = {seq:renderSeqTab,patch:renderPatchTab,patterns:renderPatternsTab,rhythm:renderRhythmTab,midi:renderMIDITab,sysex:renderSysExTab,config:renderConfigTab,standalone:renderStandaloneTab,library:renderLibraryTab};
 
 function doRender() {
   const view = TAB_VIEWS[S.tab] || renderSeqTab;
@@ -165,7 +156,7 @@ function doRender() {
 
 window._micronRender = () => schedRender();
 setRenderFn(doRender);
-[sysexSetRender,patSetRender,midiSetRender,perfSetRender,libSetRender,rhythmSetRender,configSetRender,standaloneSetRender].forEach(fn=>fn(schedRender));
+[sysexSetRender,patSetRender,midiSetRender,libSetRender,rhythmSetRender,configSetRender,standaloneSetRender].forEach(fn=>fn(schedRender));
 document.addEventListener('keydown', e => {
   if (e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA') return;
   const note = BASE_KEYS[e.key];
