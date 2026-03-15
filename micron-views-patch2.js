@@ -101,7 +101,7 @@ export function trackTab() {
       pSel('Preset','trkPreset',TRACKING_PRESETS),
       html`<div class=trk-grid>${Array.from({length:points+1},(_,i)=>{
         const y=S.patch[`trkY${i}`]??0;
-        return html`<div class=trk-bar-col style=${'min-height:6px;height:'+Math.abs(y)*0.6+'px;background:'+(y>=0?'#00e5ff':'#ff6b00');'cursor:ns-resize'} title=${`x=${i-(points===16?8:6)} y=${y}%`} onmousedown=${ev=>{
+        return html`<div class=trk-bar-col style=${'min-height:6px;height:'+Math.abs(y)*0.6+'px;background:'+(y>=0?'#00e5ff':'#ff6b00')+';cursor:ns-resize'} title=${`x=${i-(points===16?8:6)} y=${y}%`} onmousedown=${ev=>{
           const startY=ev.clientY,startV=y;
           const onMove=e=>{const dy=startY-e.clientY;sp(`trkY${i}`,Math.max(-100,Math.min(100,Math.round(startV+dy))));window._micronRender?.();};
           const up=()=>{document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',up);};
