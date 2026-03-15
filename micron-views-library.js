@@ -8,6 +8,7 @@ const CAT_ICONS = ['🕐','⭐','🎸','🎵','🌊','🎻','🎺','🎹','🥁'
 
 let render = ()=>{};
 export function setRender(fn) { render=fn; }
+let _saveName = null;
 
 export function renderLibraryTab() {
   const items = S.library.filter(p=>{
@@ -19,7 +20,11 @@ export function renderLibraryTab() {
   return html`<div>
     <div class=lib-toolbar>
       <input placeholder="Search patches..." value=${S.libraryFilter} oninput=${e=>{S.libraryFilter=e.target.value;render();}} class=search-in />
-      <button class=tbtn onclick=${()=>saveCurrentPatch()}>Save Current Patch</button>
+      ${_saveName === null
+        ? html`<button class=tbtn onclick=${()=>{_saveName=S.patch.patchName||'New Patch';render();}}>Save Current Patch</button>`
+        : html`<input class=name-in value=${_saveName} oninput=${e=>{_saveName=e.target.value;}} placeholder="Patch name" autofocus />
+               <button class=tbtn onclick=${()=>{if(_saveName){addToLibrary(_saveName,S.patch,S.patch.category||0);}_saveName=null;render();}}>Save</button>
+               <button class=tbtn onclick=${()=>{_saveName=null;render();}}>Cancel</button>`}
       <button class=tbtn onclick=${()=>importSysexToLibrary()}>Import SysEx</button>
       <button class=tbtn onclick=${()=>exportLibrary()}>Export JSON</button>
     </div>
@@ -94,11 +99,8 @@ function setAB(slot, p) {
 }
 
 function saveCurrentPatch() {
-  const name = prompt('Patch name:', S.patch.patchName||'New Patch');
-  if (name) {
-    addToLibrary(name, S.patch, S.patch.category||0);
-    render();
-  }
+  _saveName = S.patch.patchName || 'New Patch';
+  render();
 }
 
 function doRandomize() {

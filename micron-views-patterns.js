@@ -26,7 +26,7 @@ export function renderPatternsTab() {
       <h4>Pattern Settings</h4>
       <div class=pr>
         <label>Name</label>
-        <input type=text value=${pat().name} oninput=${e=>{pat().name=e.target.value;render();}} class=name-in />
+        <input type=text value=${pat().name} oninput=${e=>{pat().name=e.target.value;saveState();render();}} class=name-in />
       </div>
       <div class=pr>
         <label>Length</label>

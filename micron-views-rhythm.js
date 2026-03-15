@@ -13,6 +13,7 @@ const GRID_LABELS = {0.0625:'1/16',0.125:'1/8',0.25:'1/4',0.5:'1/2'};
 export function renderRhythmTab() {
   const r = rhythm();
   return html`<div>
+    ${renderVelPopover()}
     <div class=section>
       <h4>Rhythms</h4>
       <div class=rhythm-selector>
@@ -80,20 +81,44 @@ function renderDrumRow(drum, di, r) {
       ${r.drums.length > 1 ? html`<button class="tbtn warn" onclick=${()=>removeDrum(di)}>×</button>` : null}
     </div>
     <div class=rhythm-grid>
-      ${drum.steps.slice(0,r.len).map((s,si)=>html`<div
-        class=${'rhythm-step'+(s.active?' active':'')+(si%4===0?' beat-start':'')}
-        onclick=${()=>{s.active=!s.active;saveState();render();}}
-        oncontextmenu=${e=>{e.preventDefault();editStepVel(drum,si);}}
-        title=${'Step '+(si+1)+' vel:'+s.vel}
-        style=${s.active?`--vel-h:${Math.round(s.vel/127*100)}%`:''}
-      ></div>`)}
+      ${drum.steps.slice(0,r.len).map((s,si)=>{
+        let _pressTimer;
+        return html`<div
+          class=${'rhythm-step'+(s.active?' active':'')+(si%4===0?' beat-start':'')}
+          onclick=${()=>{s.active=!s.active;saveState();render();}}
+          oncontextmenu=${e=>{e.preventDefault();editStepVel(drum,si);}}
+          ontouchstart=${()=>{_pressTimer=setTimeout(()=>editStepVel(drum,si),500);}}
+          ontouchend=${()=>clearTimeout(_pressTimer)}
+          ontouchcancel=${()=>clearTimeout(_pressTimer)}
+          title=${'Step '+(si+1)+' vel:'+s.vel}
+          style=${s.active?`--vel-h:${Math.round(s.vel/127*100)}%`:''}
+        ></div>`;
+      })}
     </div>
   </div>`;
 }
 
+let _velEdit = null;
+
 function editStepVel(drum, si) {
-  const v = prompt('Velocity (1-127):', drum.steps[si].vel);
-  if (v !== null) { drum.steps[si].vel = Math.max(1,Math.min(127,+v)); saveState(); render(); }
+  _velEdit = { drum, si };
+  render();
+}
+
+function renderVelPopover() {
+  if (!_velEdit) return null;
+  const { drum, si } = _velEdit;
+  return html`<div class=vel-popover onclick=${e=>{if(e.target.className==='vel-popover'){_velEdit=null;render();}}}>
+    <div class=vel-popover-box>
+      <label>Step ${si+1} Velocity</label>
+      <input type=range min=1 max=127 value=${drum.steps[si].vel} class=rs oninput=${e=>{drum.steps[si].vel=+e.target.value;render();}} />
+      <span class=pv>${drum.steps[si].vel}</span>
+      <div class=btn-group>
+        <button class=tbtn onclick=${()=>{saveState();_velEdit=null;render();}}>OK</button>
+        <button class=tbtn onclick=${()=>{_velEdit=null;render();}}>Cancel</button>
+      </div>
+    </div>
+  </div>`;
 }
 
 function setLen(v) {

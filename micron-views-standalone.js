@@ -31,11 +31,12 @@ export function renderStandaloneTab() {
         ${S.syncProgress.done >= S.syncProgress.total ? html`<span class=ok> Requests sent — waiting for synth responses</span>` : null}
       </div>` : null}
       <div class=sync-summary>
-        <span>Patches received: <b>${patchCount()}</b> / 512</span>
+        <span>Patches: <b>${patchCount()}</b> / 512</span>
         <span class=sep></span>
         <span>Patterns: <b>${S.patterns.filter(p=>p.steps.some(s=>s.notes.length)).length}</b> non-empty</span>
         <span class=sep></span>
         <span>Rhythms: <b>${S.rhythms.length}</b></span>
+        ${S.syncProgress?.startedAt ? html`<span class=sep></span><span class=hint>Last requested: ${new Date(S.syncProgress.startedAt).toLocaleTimeString()}</span>` : null}
       </div>
       <div class=btn-group>
         <button class=${'tbtn'+(syncing?' disabled':'')} onclick=${()=>requestEverything()}>Request All from Synth</button>
@@ -138,7 +139,7 @@ async function sendEverything() {
 async function requestEverything() {
   const bankRequests = BANKS.length;
   const total = bankRequests + 2;
-  S.syncProgress = {done:0, total, label:'Requesting'};
+  S.syncProgress = {done:0, total, label:'Requesting', startedAt: Date.now()};
   render();
   for (let b = 0; b < BANKS.length; b++) {
     requestBank(b);

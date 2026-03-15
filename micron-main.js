@@ -105,8 +105,9 @@ function renderToolbar() {
   return html`<div id=toolbar>
     <span class=brand>ALESIS <span>MICRON</span></span>
     <span class=sep></span>
-    <span>BPM</span>
+    <button class=tbtn onclick=${()=>{S.bpm=Math.max(20,S.bpm-1);setClockSend(M.sendClock,S.bpm);schedRender();}}>−</button>
     <input type=number class=bpm-in min=20 max=300 value=${S.bpm} oninput=${e=>{S.bpm=+e.target.value;setClockSend(M.sendClock,S.bpm);schedRender();}} />
+    <button class=tbtn onclick=${()=>{S.bpm=Math.min(300,S.bpm+1);setClockSend(M.sendClock,S.bpm);schedRender();}}>+</button>
     <button class=${'tbtn'+(S.playing?' stop':' play')} onclick=${()=>togglePlay()}>${S.playing?'■ Stop':'▶ Play'}</button>
     <span class=sep></span>
     <span class=${'midi-dot'+(M.rxFlash?' rx':M.output?' ok':'')}></span>
