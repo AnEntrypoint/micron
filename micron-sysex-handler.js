@@ -34,12 +34,17 @@ export function restoreFromStorage() {
 
 export function handleSysEx(data) {
   const hex = Array.from(data).map(b=>b.toString(16).padStart(2,'0')).join(' ');
-  S.sysexLog = `Rx: [${data.length}b] ${hex.slice(0,120)}`;
-  if (!(data[1]===0x00&&data[2]===0x00&&data[3]===0x0E&&data[4]===0x22)) { render(); return; }
+  if (!(data[1]===0x00&&data[2]===0x00&&data[3]===0x0E&&data[4]===0x22)) {
+    S.sysexLog = `Rx non-Alesis: [${data.length}b] ${hex.slice(0,120)}`;
+    render(); return;
+  }
   const content = data[5];
+  S.sysexLog = `Rx: content=${content} [${data.length}b] ${hex.slice(0,80)}`;
+  console.log(`SysEx rx: content=${content} bank=${data[6]} slot=${data[8]} len=${data.length} hex=${hex.slice(0,100)}`);
   if (content === 1) handlePatchSysEx(data);
   else if (content === 3) handlePatternSysEx(data);
   else if (content === 2) handleContent2SysEx(data);
+  else S.sysexLog = `Rx unknown content=${content} [${data.length}b] ${hex.slice(0,120)}`;
   render();
 }
 
