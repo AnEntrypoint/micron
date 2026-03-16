@@ -95,7 +95,7 @@ export function renderStandaloneTab() {
       <div class=standalone-list>
         ${S.rhythms.map((r,i)=>html`<div class=standalone-slot>
           <span class=slot-name>${r.name||'(empty)'}</span>
-          <span class=slot-info>${r.len} steps · ${r.drums.length} drums</span>
+          <span class=slot-info>${r.len} steps${r.drums ? ' · '+r.drums.length+' drums' : ''}</span>
           <label>Slot</label>
           <input type=number min=0 max=127 value=${getSlot('r',i)} oninput=${e=>setSlot('r',i,+e.target.value)} class=num-in style="width:52px" />
           <button class=tbtn onclick=${()=>sendRhythmSysEx(r,getSlot('r',i))}>Send</button>
