@@ -9,7 +9,7 @@ export function setHandlerRender(fn) { render=fn; }
 let _captureBuffer = [];
 let _capturing = false;
 
-export function startCapture() { _captureBuffer = []; _capturing = true; console.log('SysEx capture started'); }
+export function startCapture() { _captureBuffer = []; _capturing = true; S._capturing = true; S.sysexLog = 'Capture started — waiting for SysEx...'; console.log('SysEx capture started'); render(); }
 export function stopCapture() {
   _capturing = false;
   if (!_captureBuffer.length) { console.log('No SysEx captured'); return; }
