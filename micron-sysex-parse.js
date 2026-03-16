@@ -11,6 +11,37 @@ function contentBase(unpacked) {
   return 0;
 }
 function parseGridLen(u, base) { const b=base||0; const len=u[b+15]||16,div=u[b+16]||16; return {len,grid:div>0?1/div:0.0625}; }
+const TICKS_PER_BAR = 2048;
+const GRID_MAP = {2:32,3:24,4:16,5:12,6:8,7:8,8:8,9:4,10:4,11:4};
+function parseMicronPattern(u, base, name, bank, slot) {
+  const gridVal = u[base+16] || 8;
+  const noteCount = u[base+27];
+  const ccCount = u[base+31];
+  const stepsPerBar = GRID_MAP[gridVal] || 16;
+  const ticksPerStep = TICKS_PER_BAR / stepsPerBar;
+  const evtStart = base + 35;
+  const events = [];
+  for (let i = 0; i < noteCount && evtStart + i * 8 + 7 < u.length; i++) {
+    const off = evtStart + i * 8;
+    const dur = u[off];
+    const pitch = s8(u[off + 2]);
+    const vel = u[off + 4];
+    const timeTicks = (u[off + 5] << 8) | u[off + 6];
+    const bar = u[off + 7] & 0x3F;
+    const totalTicks = bar * TICKS_PER_BAR + timeTicks;
+    events.push({ pitch, vel, dur, time: totalTicks, step: Math.round(totalTicks / ticksPerStep) });
+  }
+  const maxStep = events.reduce((m, e) => Math.max(m, e.step), 0);
+  const len = Math.max(stepsPerBar, Math.ceil((maxStep + 1) / stepsPerBar) * stepsPerBar);
+  const grid = 1 / stepsPerBar;
+  const steps = Array.from({length: Math.max(len, 64)}, () => ({notes: [], len: grid, prob: 100}));
+  events.forEach(e => {
+    if (e.step >= 0 && e.step < steps.length) {
+      steps[e.step].notes.push({pitch: 60 + e.pitch, vel: e.vel, len: e.dur / ticksPerStep});
+    }
+  });
+  return {name, bank, slot, len, grid, type: 'seq', steps, micronFormat: true, stepsPerBar, noteCount, ccCount};
+}
 
 export function extractParams(p) {
   return {
@@ -95,7 +126,7 @@ export function parsePatternDump(data) {
   const base=contentBase(unpacked);
   if (unpacked.length < base+18) return null;
   const name=decodeStr(unpacked.slice(base,base+14))||`Pat ${slot+1}`;
-  if (base > 0) return {name,bank,slot,rawFormat:true};
+  if (base > 0) return parseMicronPattern(unpacked, base, name, bank, slot);
   const {len,grid}=parseGridLen(unpacked, 0);
   const type=unpacked[17]?'arp':'seq';
   const steps=[];
