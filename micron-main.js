@@ -260,26 +260,11 @@ function patchCount() {
   return S.sysexBanks.slice(0, 4).reduce((n, b) => n + b.filter(Boolean).length, 0);
 }
 
-let _bgSyncing = false;
 async function syncFromSynth() {
   if (!M.output) return;
-  const { requestPatch, requestBankIndividual } = await import('./micron-sysex.js');
+  const { requestPatch } = await import('./micron-sysex.js');
   S._lastReqBank = 4; S._lastReqSlot = 0;
   requestPatch(4, 0);
-  schedRender();
-  if (_bgSyncing || patchCount() >= 100) return;
-  _bgSyncing = true;
-  const total = 512;
-  S.bgSyncProgress = { done: 0, total };
-  schedRender();
-  for (let b = 0; b < 4; b++) {
-    await requestBankIndividual(S, b, s => {
-      S.bgSyncProgress = { done: b * 128 + Math.min(s, 128), total };
-      schedRender();
-    });
-  }
-  S.bgSyncProgress = null;
-  _bgSyncing = false;
   schedRender();
 }
 
