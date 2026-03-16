@@ -88,6 +88,7 @@ export const S = {
   standaloneSlots: {},
   sendProgress: null,
   bgSyncProgress: null,
+  sysexRhythms: Array(128).fill(null),
   sysexLog: '',
   midiMonitor: [],
   lockedParams: {},

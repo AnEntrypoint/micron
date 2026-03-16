@@ -1,226 +1,125 @@
 import { html } from './micron-ui-core.js';
-import { S, defaultRhythm } from './micron-state.js';
-import { parsePatchDump, parsePatternDump, parseRhythmDump, requestBankIndividual, requestPatch, sendPatchDump } from './micron-sysex.js';
+import { S } from './micron-state.js';
+import { parsePatchDump, requestPatch, sendPatchDump, storePatchToBank, sendRawSysEx } from './micron-sysex.js';
 import { BANKS } from './micron-data.js';
 import { defaultPatch, sendAllParams } from './micron-patch.js';
 import { sendProgramChange } from './micron-midi.js';
+import { handleSysEx, setHandlerRender, restoreFromStorage } from './micron-sysex-handler.js';
 
-const CONTENT_TYPES = ['patch','rhythm','pattern'];
-if (!S.sysexContentType) S.sysexContentType = 'patch';
+export { handleSysEx };
+
 if (!S.sysexBanks) S.sysexBanks = [Array(128).fill(null),Array(128).fill(null),Array(128).fill(null),Array(128).fill(null)];
 if (!S.sysexPatterns) S.sysexPatterns = Array(128).fill(null);
 if (!S.sysexSetups) S.sysexSetups = Array(128).fill(null);
-{
-  let restored = 0;
-  for (let b = 0; b < 4; b++) for (let s = 0; s < 128; s++) {
-    if (S.sysexBanks[b][s]) continue;
-    try { const item = localStorage.getItem(`micron_patch_${b}_${s}`);
-      if (item) { const d = JSON.parse(item); S.sysexBanks[b][s] = d; restored++; } } catch(_) {}
-  }
-  for (let s = 0; s < 128; s++) {
-    if (!S.sysexPatterns[s]) try { const item = localStorage.getItem(`micron_pattern_${s}`);
-      if (item) { S.sysexPatterns[s] = JSON.parse(item); restored++; } } catch(_) {}
-    if (!S.sysexSetups[s]) try { const item = localStorage.getItem(`micron_setup_${s}`);
-      if (item) { S.sysexSetups[s] = JSON.parse(item); restored++; } } catch(_) {}
-  }
-  for (let b = 0; b < 4; b++) for (let s = 0; s < 128; s++) {
-    const p = S.sysexBanks[b][s];
-    if (p && p.raw) {
-      try { const re = parsePatchDump(new Uint8Array(p.raw));
-        if (re) { p.name = re.name; p.params = re.params;
-          try { localStorage.setItem(`micron_patch_${b}_${s}`, JSON.stringify({name: re.name, raw: p.raw})); } catch(_) {}
-        } } catch(_) {}
-    }
-  }
-  if (restored) console.log(`Restored ${restored} items from localStorage`);
-}
+if (!S.sysexRhythms) S.sysexRhythms = Array(128).fill(null);
+if (!S.storeSlot) S.storeSlot = 0;
+restoreFromStorage();
 
 let render = ()=>{};
-export function setRender(fn) { render=fn; }
+export function setRender(fn) { render=fn; setHandlerRender(fn); }
 
 export function renderSysExTab() {
-  const advKey = 'sec_sysex_advanced';
-  const advCollapsed = S.collapsedSections[advKey] !== false;
   return html`<div>
     <div class=grid2>
       <div class=section>
         <h4>Backup</h4>
         <div class=btn-group>
-          <button class=tbtn onclick=${()=>importSyx()}>Import SysEx File</button>
-          <button class=tbtn onclick=${()=>exportSyx()}>Export Bank .syx</button>
-          <button class=tbtn onclick=${()=>exportAllSyx()}>Export All Banks .syx</button>
-        </div>
-        <div class=section style="margin-top:8px;padding:0;border:none">
-          <h4 class=sh onclick=${()=>{S.collapsedSections[advKey]=!advCollapsed;render();}}>Advanced <span class=sa>${advCollapsed?'▶':'▼'}</span></h4>
-          ${!advCollapsed?html`<div>
-            <div class=pr>
-              <label>Type</label>
-              <select onchange=${e=>{S.sysexContentType=e.target.value;render();}}>
-                ${CONTENT_TYPES.map(t=>html`<option value=${t} selected=${S.sysexContentType===t}>${t}</option>`)}
-              </select>
-            </div>
-            ${S.sysexContentType==='patch'?html`<div class=pr>
-              <label>Bank</label>
-              <select onchange=${e=>{S.sysexSelectedBank=+e.target.value;render();}}>
-                ${BANKS.map((b,i)=>html`<option value=${i} selected=${S.sysexSelectedBank===i}>${b}</option>`)}
-              </select>
-            </div>`:null}
-            <div class=pr>
-              <label>Slot</label>
-              <input type=number min=0 max=127 value=${S.sysexSelectedSlot} oninput=${e=>{S.sysexSelectedSlot=Math.max(0,Math.min(127,+e.target.value));}} class=num-in />
-            </div>
-            <div class=btn-group>
-              <button class=tbtn onclick=${()=>doRequest()}>Request Single</button>
-              <button class=tbtn onclick=${()=>doRequestAll()}>Request All</button>
-            </div>
-          </div>`:null}
+          <button class=tbtn onclick=${()=>importSyx()}>Import .syx</button>
+          <button class=tbtn onclick=${()=>exportSyx()}>Export Bank</button>
+          <button class=tbtn onclick=${()=>exportAllSyx()}>Export All</button>
         </div>
       </div>
       <div class=section>
         <h4>Status</h4>
         <div class=syx-counts>
-          ${[0,1,2,3].map(b=>html`<span class=syx-count-badge>${(typeof BANKS!=='undefined'?BANKS[b]:['Red','Green','Blue','Yellow'][b])}: <b>${(S.sysexBanks&&S.sysexBanks[b]||[]).filter(Boolean).length}</b></span>`)}
+          ${[0,1,2,3].map(b=>html`<span class=syx-count-badge>${BANKS[b]}: <b>${(S.sysexBanks[b]||[]).filter(Boolean).length}</b></span>`)}
           <span class=syx-count-badge>Patterns: <b>${(S.sysexPatterns||[]).filter(Boolean).length}</b></span>
           <span class=syx-count-badge>Setups: <b>${(S.sysexSetups||[]).filter(Boolean).length}</b></span>
+          <span class=syx-count-badge>Rhythms: <b>${(S.sysexRhythms||[]).filter(Boolean).length}</b></span>
         </div>
         <div class=syx-log>${S.sysexLog||'No SysEx activity yet.'}</div>
-        <div class=syx-hex id=syx-hex></div>
       </div>
     </div>
-    <div class=section>
-      <h4>Patch Banks</h4>
-      <div class=pr>
-        <label>View Bank</label>
-        <select onchange=${e=>{S.sysexSelectedBank=+e.target.value;render();}}>
-          ${BANKS.map((b,i)=>html`<option value=${i} selected=${S.sysexSelectedBank===i}>${b} (${(S.sysexBanks&&S.sysexBanks[i]||[]).filter(Boolean).length}/128)</option>`)}
-        </select>
-      </div>
-      <input placeholder="Search patches..." value=${S.sysexBankFilter} oninput=${e=>{S.sysexBankFilter=e.target.value;render();}} class=search-in />
-      <div class=bank-grid>
-        ${(S.sysexBanks&&S.sysexBanks[S.sysexSelectedBank]||S.sysexBank).map((p,i)=>{
-          if (S.sysexBankFilter && p && !p.name.toLowerCase().includes(S.sysexBankFilter.toLowerCase())) return null;
-          return html`<div class=${'bank-cell'+(p?' loaded':'')} title=${p?p.name:''} onclick=${()=>{if(p){loadBankPatch(p,i);}}}>
-            <span class=bc-num>${i+1}</span>
-            <span class=bc-name>${p?p.name:'—'}</span>
-            ${p?html`<button class=bc-recall title="Recall on synth then fetch edit buffer" onclick=${ev=>{ev.stopPropagation();recallOnSynth(S.sysexSelectedBank,i);}}>▶</button>`:null}
-          </div>`;
-        })}
-      </div>
-      <div class=btn-group style="margin-top:8px">
-        <button class=tbtn onclick=${()=>loadFromSynth()}>Load from Synth (Program Change + Fetch)</button>
-      </div>
+    ${renderPatchBanks()}
+    ${renderSetups()}
+  </div>`;
+}
+
+function renderPatchBanks() {
+  const bi = S.sysexSelectedBank;
+  return html`<div class=section>
+    <h4>Patch Banks</h4>
+    <div class=pr>
+      <label>View Bank</label>
+      <select onchange=${e=>{S.sysexSelectedBank=+e.target.value;render();}}>
+        ${BANKS.map((b,i)=>html`<option value=${i} selected=${bi===i}>${b} (${(S.sysexBanks[i]||[]).filter(Boolean).length}/128)</option>`)}
+      </select>
+    </div>
+    <input placeholder="Search patches..." value=${S.sysexBankFilter} oninput=${e=>{S.sysexBankFilter=e.target.value;render();}} class=search-in />
+    <div class=bank-grid>
+      ${(S.sysexBanks[bi]||[]).map((p,i)=>{
+        if (S.sysexBankFilter && p && !p.name.toLowerCase().includes(S.sysexBankFilter.toLowerCase())) return null;
+        return html`<div class=${'bank-cell'+(p?' loaded':'')} title=${p?p.name:''} onclick=${()=>{if(p) loadBankPatch(p,i);}}>
+          <span class=bc-num>${i+1}</span>
+          <span class=bc-name>${p?p.name:'—'}</span>
+          ${p?html`<span class=bc-actions>
+            <button class=bc-recall title="Recall on synth" onclick=${ev=>{ev.stopPropagation();recallOnSynth(bi,i);}}>▶</button>
+            ${p.raw?html`<button class=bc-recall title="Store to Yellow bank" onclick=${ev=>{ev.stopPropagation();doStore(p,i);}}>⬆</button>`:null}
+          </span>`:null}
+        </div>`;
+      })}
+    </div>
+    <div class=pr style="margin-top:8px">
+      <label>Store to Yellow slot</label>
+      <input type=number min=0 max=127 value=${S.storeSlot||0} oninput=${e=>{S.storeSlot=Math.max(0,Math.min(127,+e.target.value));}} class=num-in />
+      <button class=tbtn onclick=${()=>loadFromSynth()}>Load from Synth</button>
     </div>
   </div>`;
 }
 
-function doBankRequest(bankIdx) {
-  requestBankIndividual(S, bankIdx, s => {
-    if (s === 128) {
-      S.sysexLog = `Bank ${BANKS[bankIdx]} complete: ${(S.sysexBanks[bankIdx]||[]).filter(Boolean).length}/128 received`;
-    }
-    render();
-  });
+function renderSetups() {
+  const setups = (S.sysexSetups||[]).filter(Boolean);
+  const rhythms = (S.sysexRhythms||[]).filter(Boolean);
+  if (!setups.length && !rhythms.length) return null;
+  return html`<div class=grid2>
+    ${setups.length ? html`<div class=section>
+      <h4>Setups (${setups.length})</h4>
+      <div class=standalone-list>
+        ${(S.sysexSetups||[]).map((s,i)=>s?html`<div class=standalone-slot>
+          <span class=slot-name>${s.name}</span><span class=slot-info>Slot ${i}</span>
+          ${s.raw?html`<button class=tbtn onclick=${()=>{sendRawSysEx(s.raw);S.sysexLog='Sent setup "'+s.name+'"';render();}}>Send</button>`:null}
+        </div>`:null)}
+      </div>
+    </div>` : null}
+    ${rhythms.length ? html`<div class=section>
+      <h4>Rhythms (${rhythms.length})</h4>
+      <div class=standalone-list>
+        ${(S.sysexRhythms||[]).map((r,i)=>r?html`<div class=standalone-slot>
+          <span class=slot-name>${r.name}</span><span class=slot-info>Slot ${i}</span>
+          ${r.raw?html`<button class=tbtn onclick=${()=>{sendRawSysEx(r.raw);S.sysexLog='Sent rhythm "'+r.name+'"';render();}}>Send</button>`:null}
+        </div>`:null)}
+      </div>
+    </div>` : null}
+  </div>`;
 }
 
-function doRequest() {
-  if (S.sysexContentType === 'patch') {
-    import('./micron-midi.js').then(({midiOut}) => {
-      S._lastReqBank = S.sysexSelectedBank;
-      S._lastReqSlot = S.sysexSelectedSlot;
-      midiOut([0xF0,0x00,0x00,0x0E,0x22,0x41,S.sysexSelectedBank&0x0F,0x00,S.sysexSelectedSlot&0x7F,0xF7]);
-    });
-    S.sysexLog = `Requested patch ${S.sysexSelectedSlot} from bank ${BANKS[S.sysexSelectedBank]}`;
-  } else {
-    S.sysexLog = 'Patterns/rhythms cannot be requested remotely. Use the Micron menu: select item → push knob → "Send MIDI sysex?"';
-  }
-  render();
-}
-
-function doRequestAll() {
-  if (S.sysexContentType === 'patch') {
-    doBankRequest(S.sysexSelectedBank);
-    S.sysexLog = `Requesting all patches in bank ${BANKS[S.sysexSelectedBank]}...`;
-  } else {
-    S.sysexLog = 'Patterns/rhythms/setups cannot be requested remotely. On the Micron: select the item → push knob → "Send MIDI sysex?"';
-  }
-  render();
-}
-
-export function handleSysEx(data) {
-  const hex = Array.from(data).map(b=>b.toString(16).padStart(2,'0')).join(' ');
-  S.sysexLog = `Rx: [${data.length}b] ${hex.slice(0,120)}`;
-  if (!(data[1]===0x00&&data[2]===0x00&&data[3]===0x0E&&data[4]===0x22)) { render(); return; }
-  const content = data[5];
-  if (content === 1) {
-    const parsed = parsePatchDump(data);
-    if (parsed) {
-      let { bank, slot, name, params } = parsed;
-      if (bank === 4 && S._lastReqBank !== undefined) { bank = S._lastReqBank; slot = S._lastReqSlot; }
-      if (!S.sysexBanks) S.sysexBanks = [Array(128).fill(null),Array(128).fill(null),Array(128).fill(null),Array(128).fill(null)];
-      const raw = Array.from(data);
-      if (bank>=0&&bank<=4) {
-        if (!S.sysexBanks[4]) S.sysexBanks[4] = Array(4).fill(null);
-        const maxSlot = bank === 4 ? 3 : 127;
-        if (slot >= 0 && slot <= maxSlot) {
-          S.sysexBanks[bank][slot] = {name, params, raw};
-          try { localStorage.setItem(`micron_patch_${bank}_${slot}`, JSON.stringify({name, raw})); } catch(_) {}
-        }
-      }
-      if (bank===S.sysexSelectedBank) S.sysexBank[slot] = {name, params, raw};
-      S.patch = {...defaultPatch(), ...params};
-      S.sysexLog = `Rx patch: "${name}" bank ${BANKS[bank]||bank} slot ${slot}`;
-    }
-  } else if (content === 3) {
-    const raw = Array.from(data);
-    const parsed = parsePatternDump(data);
-    const slot = data[8] & 0x7F;
-    const name = parsed?.name || `Pattern ${slot+1}`;
-    if (!S.sysexPatterns) S.sysexPatterns = Array(128).fill(null);
-    if (slot >= 0 && slot < 128) {
-      S.sysexPatterns[slot] = {name, raw};
-      try { localStorage.setItem(`micron_pattern_${slot}`, JSON.stringify({name, raw})); } catch(_) {}
-    }
-    if (parsed) {
-      const { len, grid, type, steps } = parsed;
-      while (S.patterns.length <= slot) S.patterns.push({name:`Pat ${S.patterns.length+1}`,len:16,grid:0.0625,type:'seq',steps:Array.from({length:64},()=>({notes:[],len:0.0625,prob:100}))});
-      S.patterns[slot] = { name, len, grid, type, steps };
-    }
-    S.sysexLog = `Rx pattern: "${name}" slot ${slot} [${data.length}b]`;
-  } else if (content === 2) {
-    const raw = Array.from(data);
-    const slot = data[8] & 0x7F;
-    const parsed = parseRhythmDump(data);
-    const name = parsed?.name || `Setup ${slot+1}`;
-    if (!S.sysexSetups) S.sysexSetups = Array(128).fill(null);
-    if (slot >= 0 && slot < 128) {
-      S.sysexSetups[slot] = {name, raw};
-      try { localStorage.setItem(`micron_setup_${slot}`, JSON.stringify({name, raw})); } catch(_) {}
-    }
-    if (parsed) {
-      while (S.rhythms.length <= slot) S.rhythms.push(defaultRhythm());
-      S.rhythms[slot] = { name, len: parsed.len, grid: parsed.grid, drums: parsed.drums };
-    }
-    S.sysexLog = `Rx setup/rhythm: "${name}" slot ${slot} [${data.length}b]`;
-  }
+function doStore(p, fromSlot) {
+  if (!p.raw) return;
+  storePatchToBank(p.raw, 3, S.storeSlot ?? fromSlot);
+  S.sysexLog = `Stored "${p.name}" to Yellow slot ${S.storeSlot??fromSlot}`;
   render();
 }
 
 function recallOnSynth(bank, slot) {
   sendProgramChange(bank, slot);
-  S.sysexLog = `Sent Program Change: bank ${BANKS[bank]||bank} slot ${slot+1}. Fetching edit buffer...`;
-  S._lastReqBank = 4;
-  S._lastReqSlot = 0;
+  S._lastReqBank = 4; S._lastReqSlot = 0;
   setTimeout(() => { requestPatch(4, 0); render(); }, 150);
   render();
 }
 
 function loadFromSynth() {
-  const bank = S.sysexSelectedBank;
-  const slot = S.sysexSelectedSlot;
-  sendProgramChange(bank, slot);
-  S.sysexLog = `Sent Program Change: bank ${BANKS[bank]||bank} slot ${slot+1}. Fetching edit buffer...`;
-  S._lastReqBank = 4;
-  S._lastReqSlot = 0;
+  sendProgramChange(S.sysexSelectedBank, S.sysexSelectedSlot);
+  S._lastReqBank = 4; S._lastReqSlot = 0;
   setTimeout(() => { requestPatch(4, 0); render(); }, 150);
   render();
 }
@@ -231,9 +130,7 @@ function loadBankPatch(p, i) {
     const parsed = parsePatchDump(new Uint8Array(p.raw));
     if (parsed) params = parsed.params;
     sendPatchDump(p.raw);
-  } else {
-    sendAllParams({...defaultPatch(), ...(params || {})});
-  }
+  } else sendAllParams({...defaultPatch(), ...(params || {})});
   S.patch = {...defaultPatch(), ...(params || {})};
   S.sysexLog = `Loaded "${p.name}" (slot ${i+1})`;
   render();
@@ -245,16 +142,16 @@ function importSyx() {
     const file = e.target.files[0]; if(!file) return;
     const reader = new FileReader();
     reader.onload = ev => {
-      const data = new Uint8Array(ev.target.result);
+      const d = new Uint8Array(ev.target.result);
       let i=0, count=0;
-      while(i<data.length) {
-        if(data[i]!==0xF0) { i++; continue; }
-        const end=data.indexOf(0xF7,i); if(end<0) break;
-        const parsed=parsePatchDump(data.slice(i,end+1));
-        if(parsed&&parsed.slot>=0&&parsed.slot<128) { S.sysexBank[parsed.slot]={name:parsed.name,params:parsed.params}; count++; }
+      while(i<d.length) {
+        if(d[i]!==0xF0) { i++; continue; }
+        const end=d.indexOf(0xF7,i); if(end<0) break;
+        const msg = d.slice(i,end+1);
+        if (msg[1]===0&&msg[2]===0&&msg[3]===0x0E&&msg[4]===0x22) { handleSysEx(msg); count++; }
         i=end+1;
       }
-      S.sysexLog=`Imported ${count} patches from file`; render();
+      S.sysexLog=`Imported ${count} SysEx messages`; render();
     };
     reader.readAsArrayBuffer(file);
   };
@@ -268,23 +165,22 @@ function downloadBytes(bytes, filename) {
 }
 
 function exportSyx() {
-  const bank = S.sysexBanks&&S.sysexBanks[S.sysexSelectedBank] || S.sysexBank;
+  const bank = S.sysexBanks?.[S.sysexSelectedBank] || S.sysexBank;
   const withRaw = (bank||[]).filter(p=>p?.raw);
-  if (!withRaw.length) { alert('No backed-up patches in this bank. Run backup first.'); return; }
-  const bankName = (BANKS[S.sysexSelectedBank]||'bank').toLowerCase().replace(/\s/g,'-');
-  downloadBytes(withRaw.flatMap(p=>p.raw), `micron-${bankName}.syx`);
+  if (!withRaw.length) { alert('No patches in this bank.'); return; }
+  const name = (BANKS[S.sysexSelectedBank]||'bank').toLowerCase().replace(/\s/g,'-');
+  downloadBytes(withRaw.flatMap(p=>p.raw), `micron-${name}.syx`);
 }
 
 function exportAllSyx() {
-  const patchRaw = (S.sysexBanks||[]).flatMap(bank => (bank||[]).filter(p=>p?.raw).flatMap(p=>p.raw));
-  const patternRaw = (S.sysexPatterns||[]).filter(p=>p?.raw).flatMap(p=>p.raw);
-  const setupRaw = (S.sysexSetups||[]).filter(p=>p?.raw).flatMap(p=>p.raw);
-  const allRaw = [...patchRaw, ...patternRaw, ...setupRaw];
-  if (!allRaw.length) { alert('Nothing backed up yet. Run backup and send patterns/setups from Micron first.'); return; }
-  const pCount = (S.sysexBanks||[]).flatMap(b=>b||[]).filter(p=>p?.raw).length;
-  const patCount = (S.sysexPatterns||[]).filter(p=>p?.raw).length;
-  const sCount = (S.sysexSetups||[]).filter(p=>p?.raw).length;
-  downloadBytes(allRaw, 'micron-full-backup.syx');
-  S.sysexLog = `Exported: ${pCount} patches, ${patCount} patterns, ${sCount} setups/rhythms → micron-full-backup.syx`;
+  const all = [
+    ...(S.sysexBanks||[]).flatMap(b=>(b||[]).filter(p=>p?.raw).flatMap(p=>p.raw)),
+    ...(S.sysexPatterns||[]).filter(p=>p?.raw).flatMap(p=>p.raw),
+    ...(S.sysexSetups||[]).filter(p=>p?.raw).flatMap(p=>p.raw),
+    ...(S.sysexRhythms||[]).filter(p=>p?.raw).flatMap(p=>p.raw),
+  ];
+  if (!all.length) { alert('Nothing backed up yet.'); return; }
+  downloadBytes(all, 'micron-full-backup.syx');
+  S.sysexLog = 'Exported full backup';
   render();
 }

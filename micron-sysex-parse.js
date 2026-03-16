@@ -105,6 +105,7 @@ export function parseRhythmDump(data) {
   const name=decodeStr(unpacked.slice(0,14))||`Rhythm ${slot+1}`;
   const {len,grid}=parseGridLen(unpacked);
   const numDrums=unpacked[18]||0;
+  if (numDrums === 0 || numDrums > 16) return null;
   const drums=[];
   let off=19;
   for (let d=0;d<numDrums&&off+16<unpacked.length;d++) {
@@ -117,12 +118,14 @@ export function parseRhythmDump(data) {
     drums.push({program,level,pan,steps});
   }
   if (!drums.length) return null;
-  return {name,bank,slot,len,grid,drums};
+  return {name,bank,slot,len,grid,drums,isRhythm:true};
 }
 
 export function parseSetupDump(data) {
   if (!isAlesisDump(data, CONTENT_SETUP)) return null;
+  const slot=data[8]&0x7F, bank=data[6]&0x0F;
   const unpacked=unpackDump(data);
-  if (unpacked.length<10) return null;
-  return {contrast:unpacked[0]&0x0F,tuning:unpacked[1],transpose:unpacked[2],midiChannel:(unpacked[3]&0x0F)+1,localControl:(unpacked[4]&1)?'on':'off'};
+  if (unpacked.length<14) return null;
+  const name=decodeStr(unpacked.slice(0,14))||`Setup ${slot+1}`;
+  return {name,bank,slot,isSetup:true};
 }

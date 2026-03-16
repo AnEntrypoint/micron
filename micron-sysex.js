@@ -63,6 +63,19 @@ export function sendPatchDump(raw) {
   midiOut(msg);
 }
 
+export function storePatchToBank(raw, bank, slot) {
+  if (!raw || !raw.length) return;
+  const msg = Array.from(raw instanceof Uint8Array ? raw : new Uint8Array(raw));
+  msg[6] = bank & 0x0F;
+  msg[8] = slot & 0x7F;
+  midiOut(msg);
+}
+
+export function sendRawSysEx(raw) {
+  if (!raw || !raw.length) return;
+  midiOut(Array.from(raw instanceof Uint8Array ? raw : new Uint8Array(raw)));
+}
+
 export function requestPatch(bank, slot) {
   midiOut([0xF0, 0x00, 0x00, 0x0E, 0x22, 0x41, bank & 0x0F, 0x00, slot & 0x7F, 0xF7]);
 }
