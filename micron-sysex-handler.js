@@ -51,9 +51,11 @@ export function restoreFromStorage() {
 
 export function handleSysEx(data) {
   if (_capturing) _captureBuffer.push(Array.from(data));
-  const hex = Array.from(data).map(b=>b.toString(16).padStart(2,'0')).join(' ');
+  S._captureCount = _captureBuffer.length;
+  const hex = Array.from(data.slice(0,20)).map(b=>b.toString(16).padStart(2,'0')).join(' ');
+  S.sysexLog = `Rx #${_captureBuffer.length}: [${data.length}b] ${hex}`;
+  console.log(`SysEx #${_captureBuffer.length}: len=${data.length} first20=${hex}`);
   if (!(data[1]===0x00&&data[2]===0x00&&data[3]===0x0E&&data[4]===0x22)) {
-    S.sysexLog = `Rx non-Alesis: [${data.length}b] ${hex.slice(0,120)}`;
     render(); return;
   }
   const content = data[5];

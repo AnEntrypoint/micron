@@ -37,7 +37,7 @@ export function renderStandaloneTab() {
       </div>
       <p style="margin:8px 0 0;font-size:0.85em;opacity:0.7">Or send items individually: select item on Micron → push knob → "Send MIDI sysex?"</p>
       <div class=btn-group style="margin-top:8px">
-        <button class=${'tbtn'+(S._capturing?' active':'')} onclick=${()=>{startCapture();render();}}>${S._capturing?'● Capturing...':'Start Capture'}</button>
+        <button class=${'tbtn'+(S._capturing?' active':'')} onclick=${()=>{startCapture();render();}}>${S._capturing?`● Capturing... (${S._captureCount||0} msgs)`:'Start Capture'}</button>
         <button class=tbtn onclick=${()=>{S._capturing=false;stopCapture();render();}}>Stop & Save .syx</button>
       </div>
     </div>
