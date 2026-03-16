@@ -5,3 +5,6 @@ bun.lock
 .code-search/
 screenshots/
 .prd
+_*.js
+*.syx
+*.png
