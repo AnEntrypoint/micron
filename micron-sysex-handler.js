@@ -8,6 +8,7 @@ export function setHandlerRender(fn) { render=fn; }
 
 let _captureBuffer = [];
 let _capturing = false;
+let _rxCounters = { pattern: 0, setup: 0, rhythm: 0 };
 
 export function startCapture() { _captureBuffer = []; _capturing = true; S._capturing = true; S.sysexLog = 'Capture started — waiting for SysEx...'; console.log('SysEx capture started'); render(); }
 export function stopCapture() {
@@ -55,16 +56,19 @@ export function handleSysEx(data) {
   const hex = Array.from(data.slice(0,20)).map(b=>b.toString(16).padStart(2,'0')).join(' ');
   S.sysexLog = `Rx #${_captureBuffer.length}: [${data.length}b] ${hex}`;
   console.log(`SysEx #${_captureBuffer.length}: len=${data.length} first20=${hex}`);
-  if (!(data[1]===0x00&&data[2]===0x00&&data[3]===0x0E&&data[4]===0x22)) {
+  const isAlesis = data[1]===0x00&&data[2]===0x00&&data[3]===0x0E;
+  const productId = data[4];
+  if (!isAlesis || (productId !== 0x22 && productId !== 0x26)) {
     render(); return;
   }
   const content = data[5];
   S.sysexLog = `Rx: content=${content} [${data.length}b] ${hex.slice(0,80)}`;
   console.log(`SysEx rx: content=${content} bank=${data[6]} slot=${data[8]} len=${data.length} hex=${hex.slice(0,100)}`);
   if (content === 1) handlePatchSysEx(data);
-  else if (content === 3) handlePatternSysEx(data);
   else if (content === 2) handleContent2SysEx(data);
-  else S.sysexLog = `Rx unknown content=${content} [${data.length}b] ${hex.slice(0,120)}`;
+  else if (content === 3) handlePatternSysEx(data);
+  else if (content === 4) handleContent4SysEx(data);
+  else S.sysexLog = `Rx unknown content=${content} product=0x${productId.toString(16)} [${data.length}b]`;
   render();
 }
 
@@ -90,11 +94,12 @@ function handlePatchSysEx(data) {
 
 function handlePatternSysEx(data) {
   const raw = Array.from(data);
+  const is26 = data[4] === 0x26;
+  const slot = is26 ? _rxCounters.pattern++ : data[8] & 0x7F;
   const parsed = parsePatternDump(data);
-  const slot = data[8] & 0x7F;
   const name = parsed?.name || `Pattern ${slot+1}`;
-  if (!S.sysexPatterns) S.sysexPatterns = Array(128).fill(null);
-  if (slot >= 0 && slot < 128) {
+  if (!S.sysexPatterns) S.sysexPatterns = Array(256).fill(null);
+  if (slot >= 0 && slot < 256) {
     S.sysexPatterns[slot] = {name, raw};
     try { localStorage.setItem(`micron_pattern_${slot}`, JSON.stringify({name, raw})); } catch(_) {}
   }
@@ -103,31 +108,37 @@ function handlePatternSysEx(data) {
     while (S.patterns.length <= slot) S.patterns.push({name:`Pat ${S.patterns.length+1}`,len:16,grid:0.0625,type:'seq',steps:Array.from({length:64},()=>({notes:[],len:0.0625,prob:100}))});
     S.patterns[slot] = { name, len, grid, type, steps };
   }
-  S.sysexLog = `Rx pattern: "${name}" slot ${slot} [${data.length}b]`;
+  S.sysexLog = `Rx pattern #${slot}: "${name}" [${data.length}b]`;
 }
 
 function handleContent2SysEx(data) {
   const raw = Array.from(data);
-  const slot = data[8] & 0x7F;
-  const rhythmParsed = parseRhythmDump(data);
-  if (rhythmParsed) {
-    const name = rhythmParsed.name;
-    if (!S.sysexRhythms) S.sysexRhythms = Array(128).fill(null);
-    if (slot >= 0 && slot < 128) {
-      S.sysexRhythms[slot] = {name, raw};
-      try { localStorage.setItem(`micron_rhythm_${slot}`, JSON.stringify({name, raw})); } catch(_) {}
-    }
-    while (S.rhythms.length <= slot) S.rhythms.push(defaultRhythm());
-    S.rhythms[slot] = { name, len: rhythmParsed.len, grid: rhythmParsed.grid, drums: rhythmParsed.drums };
-    S.sysexLog = `Rx rhythm: "${name}" slot ${slot} [${data.length}b]`;
-    return;
-  }
+  const is26 = data[4] === 0x26;
+  const slot = is26 ? _rxCounters.setup++ : data[8] & 0x7F;
   const setupParsed = parseSetupDump(data);
   const name = setupParsed?.name || `Setup ${slot+1}`;
-  if (!S.sysexSetups) S.sysexSetups = Array(128).fill(null);
-  if (slot >= 0 && slot < 128) {
+  if (!S.sysexSetups) S.sysexSetups = Array(256).fill(null);
+  if (slot >= 0 && slot < 256) {
     S.sysexSetups[slot] = {name, raw};
     try { localStorage.setItem(`micron_setup_${slot}`, JSON.stringify({name, raw})); } catch(_) {}
   }
-  S.sysexLog = `Rx setup: "${name}" slot ${slot} [${data.length}b]`;
+  S.sysexLog = `Rx setup #${slot}: "${name}" [${data.length}b]`;
+}
+
+function handleContent4SysEx(data) {
+  const raw = Array.from(data);
+  const is26 = data[4] === 0x26;
+  const slot = is26 ? _rxCounters.rhythm++ : data[8] & 0x7F;
+  const rhythmParsed = parseRhythmDump(data);
+  const name = rhythmParsed?.name || `Rhythm ${slot+1}`;
+  if (!S.sysexRhythms) S.sysexRhythms = Array(256).fill(null);
+  if (slot >= 0 && slot < 256) {
+    S.sysexRhythms[slot] = {name, raw};
+    try { localStorage.setItem(`micron_rhythm_${slot}`, JSON.stringify({name, raw})); } catch(_) {}
+  }
+  if (rhythmParsed) {
+    while (S.rhythms.length <= slot) S.rhythms.push(defaultRhythm());
+    S.rhythms[slot] = { name, len: rhythmParsed.len, grid: rhythmParsed.grid, drums: rhythmParsed.drums };
+  }
+  S.sysexLog = `Rx rhythm #${slot}: "${name}" [${data.length}b]`;
 }
