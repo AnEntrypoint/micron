@@ -1,6 +1,7 @@
 import { html } from './micron-ui-core.js';
 import { S, saveState } from './micron-state.js';
 import { sendPatternSysEx, sendRhythmSysEx, requestBankIndividual, sendRawSysEx } from './micron-sysex.js';
+import { startCapture, stopCapture } from './micron-sysex-handler.js';
 import { BANKS } from './micron-data.js';
 
 let render = ()=>{};
@@ -36,8 +37,8 @@ export function renderStandaloneTab() {
       </div>
       <p style="margin:8px 0 0;font-size:0.85em;opacity:0.7">Or send items individually: select item on Micron → push knob → "Send MIDI sysex?"</p>
       <div class=btn-group style="margin-top:8px">
-        <button class=tbtn onclick=${()=>{window._startCapture?.();render();}}>Start Capture</button>
-        <button class=tbtn onclick=${()=>{window._stopCapture?.();render();}}>Stop & Save .syx</button>
+        <button class=tbtn onclick=${()=>{startCapture();render();}}>Start Capture</button>
+        <button class=tbtn onclick=${()=>{stopCapture();render();}}>Stop & Save .syx</button>
       </div>
     </div>
 
