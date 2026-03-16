@@ -12,13 +12,11 @@ function contentBase(unpacked) {
 }
 function parseGridLen(u, base) { const b=base||0; const len=u[b+15]||16,div=u[b+16]||16; return {len,grid:div>0?1/div:0.0625}; }
 const TICKS_PER_BAR = 2048;
-const GRID_MAP = {2:32,3:24,4:16,5:12,6:8,7:8,8:8,9:4,10:4,11:4};
+const TICKS_PER_STEP = 128;
+const STEPS_PER_BAR = 16;
 function parseMicronPattern(u, base, name, bank, slot) {
-  const gridVal = u[base+16] || 8;
-  const noteCount = u[base+27];
-  const ccCount = u[base+31];
-  const stepsPerBar = GRID_MAP[gridVal] || 16;
-  const ticksPerStep = TICKS_PER_BAR / stepsPerBar;
+  const noteCount = u[base + 27];
+  const ccCount = u[base + 31];
   const evtStart = base + 35;
   const events = [];
   for (let i = 0; i < noteCount && evtStart + i * 8 + 7 < u.length; i++) {
@@ -27,20 +25,19 @@ function parseMicronPattern(u, base, name, bank, slot) {
     const pitch = s8(u[off + 2]);
     const vel = u[off + 4];
     const timeTicks = (u[off + 5] << 8) | u[off + 6];
-    const bar = u[off + 7] & 0x3F;
-    const totalTicks = bar * TICKS_PER_BAR + timeTicks;
-    events.push({ pitch, vel, dur, time: totalTicks, step: Math.round(totalTicks / ticksPerStep) });
+    events.push({ pitch, vel, dur, time: timeTicks, step: Math.round(timeTicks / TICKS_PER_STEP) });
   }
-  const maxStep = events.reduce((m, e) => Math.max(m, e.step), 0);
-  const len = Math.max(stepsPerBar, Math.ceil((maxStep + 1) / stepsPerBar) * stepsPerBar);
-  const grid = 1 / stepsPerBar;
-  const steps = Array.from({length: Math.max(len, 64)}, () => ({notes: [], len: grid, prob: 100}));
+  const maxTime = events.reduce((m, e) => Math.max(m, e.time), 0);
+  const bars = Math.max(1, Math.ceil((maxTime + 1) / TICKS_PER_BAR));
+  const len = bars * STEPS_PER_BAR;
+  const grid = 1 / STEPS_PER_BAR;
+  const steps = Array.from({length: Math.max(len, 16)}, () => ({notes: [], len: grid, prob: 100}));
   events.forEach(e => {
     if (e.step >= 0 && e.step < steps.length) {
-      steps[e.step].notes.push({pitch: 60 + e.pitch, vel: e.vel, len: e.dur / ticksPerStep});
+      steps[e.step].notes.push({pitch: 60 + e.pitch, vel: e.vel, len: e.dur / TICKS_PER_STEP});
     }
   });
-  return {name, bank, slot, len, grid, type: 'seq', steps, micronFormat: true, stepsPerBar, noteCount, ccCount};
+  return {name, bank, slot, len, grid, type: 'seq', steps, micronFormat: true, noteCount, ccCount};
 }
 
 export function extractParams(p) {
