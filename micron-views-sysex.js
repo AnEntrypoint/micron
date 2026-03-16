@@ -15,13 +15,22 @@ if (!S.sysexSetups) S.sysexSetups = Array(128).fill(null);
   for (let b = 0; b < 4; b++) for (let s = 0; s < 128; s++) {
     if (S.sysexBanks[b][s]) continue;
     try { const item = localStorage.getItem(`micron_patch_${b}_${s}`);
-      if (item) { S.sysexBanks[b][s] = JSON.parse(item); restored++; } } catch(_) {}
+      if (item) { const d = JSON.parse(item); S.sysexBanks[b][s] = d; restored++; } } catch(_) {}
   }
   for (let s = 0; s < 128; s++) {
     if (!S.sysexPatterns[s]) try { const item = localStorage.getItem(`micron_pattern_${s}`);
       if (item) { S.sysexPatterns[s] = JSON.parse(item); restored++; } } catch(_) {}
     if (!S.sysexSetups[s]) try { const item = localStorage.getItem(`micron_setup_${s}`);
       if (item) { S.sysexSetups[s] = JSON.parse(item); restored++; } } catch(_) {}
+  }
+  for (let b = 0; b < 4; b++) for (let s = 0; s < 128; s++) {
+    const p = S.sysexBanks[b][s];
+    if (p && p.raw) {
+      try { const re = parsePatchDump(new Uint8Array(p.raw));
+        if (re) { p.name = re.name; p.params = re.params;
+          try { localStorage.setItem(`micron_patch_${b}_${s}`, JSON.stringify({name: re.name, raw: p.raw})); } catch(_) {}
+        } } catch(_) {}
+    }
   }
   if (restored) console.log(`Restored ${restored} items from localStorage`);
 }
