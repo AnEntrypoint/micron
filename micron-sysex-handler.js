@@ -8,7 +8,9 @@ export function setHandlerRender(fn) { render=fn; }
 
 let _captureBuffer = [];
 let _capturing = false;
-let _rxCounters = { pattern: 0, setup: 0, rhythm: 0 };
+let _rxCounters = { program: 0, pattern: 0, setup: 0, rhythm: 0 };
+
+export function resetRxCounters() { _rxCounters = { program: 0, pattern: 0, setup: 0, rhythm: 0 }; }
 
 export function startCapture() { _captureBuffer = []; _capturing = true; S._capturing = true; S.sysexLog = 'Capture started — waiting for SysEx...'; console.log('SysEx capture started'); render(); }
 export function stopCapture() {
@@ -76,18 +78,23 @@ function handlePatchSysEx(data) {
   const parsed = parsePatchDump(data);
   if (!parsed) return;
   let { bank, slot, name, params } = parsed;
-  if (bank === 4 && S._lastReqBank !== undefined) { bank = S._lastReqBank; slot = S._lastReqSlot; }
+  if (bank === 4 && S._lastReqBank !== undefined && S._lastReqBank < 4) {
+    bank = S._lastReqBank; slot = S._lastReqSlot;
+  } else if (bank === 4 && (S._lastReqBank === undefined || S._lastReqBank === 4)) {
+    const idx = _rxCounters.program++;
+    bank = Math.floor(idx / 128) % 4;
+    slot = idx % 128;
+  }
   if (!S.sysexBanks) S.sysexBanks = [Array(128).fill(null),Array(128).fill(null),Array(128).fill(null),Array(128).fill(null)];
   const raw = Array.from(data);
-  if (bank>=0&&bank<=4) {
+  if (bank >= 0 && bank < 4 && slot >= 0 && slot < 128) {
+    S.sysexBanks[bank][slot] = {name, params, raw};
+    try { localStorage.setItem(`micron_patch_${bank}_${slot}`, JSON.stringify({name, raw})); } catch(_) {}
+  } else if (bank === 4) {
     if (!S.sysexBanks[4]) S.sysexBanks[4] = Array(4).fill(null);
-    const maxSlot = bank === 4 ? 3 : 127;
-    if (slot >= 0 && slot <= maxSlot) {
-      S.sysexBanks[bank][slot] = {name, params, raw};
-      try { localStorage.setItem(`micron_patch_${bank}_${slot}`, JSON.stringify({name, raw})); } catch(_) {}
-    }
+    if (slot >= 0 && slot < 4) S.sysexBanks[4][slot] = {name, params, raw};
   }
-  if (bank===S.sysexSelectedBank) S.sysexBank[slot] = {name, params, raw};
+  if (bank === S.sysexSelectedBank) S.sysexBank[slot] = {name, params, raw};
   S.patch = {...defaultPatch(), ...params};
   S.sysexLog = `Rx program: "${name}" bank ${BANKS[bank]||bank} slot ${slot}`;
 }

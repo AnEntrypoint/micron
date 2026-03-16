@@ -1,12 +1,16 @@
 import { unpack7of8 } from './micron-sysex.js';
 
-const CONTENT_SETUP = 2, CONTENT_PATTERN = 3;
+const CONTENT_SETUP = 2, CONTENT_PATTERN = 3, CONTENT_RHYTHM = 4;
 function s8(v) { return v > 127 ? v - 256 : v; }
 function s16(hi, lo) { const v = (hi<<8)|lo; return v > 32767 ? v - 65536 : v; }
 function isAlesisDump(data, cb) { return data[1]===0x00&&data[2]===0x00&&data[3]===0x0E&&(data[4]===0x22||data[4]===0x26)&&data[5]===cb; }
 function decodeStr(bytes) { return bytes.map(b=>b>=32&&b<127?String.fromCharCode(b):'').join('').trim(); }
 function unpackDump(data) { return unpack7of8(Array.from(data).slice(9, data.length-1)); }
-function parseGridLen(u) { const len=u[15]||16,div=u[16]||16; return {len,grid:div>0?1/div:0.0625}; }
+function contentBase(unpacked) {
+  if (unpacked[0]===0x51&&unpacked[1]===0x30&&unpacked[2]===0x31) return 56;
+  return 0;
+}
+function parseGridLen(u, base) { const b=base||0; const len=u[b+15]||16,div=u[b+16]||16; return {len,grid:div>0?1/div:0.0625}; }
 
 export function extractParams(p) {
   return {
@@ -75,7 +79,7 @@ export function extractParams(p) {
 export function parsePatchDump(data) {
   if (data[1]!==0x00||data[2]!==0x00||data[3]!==0x0E||(data[4]!==0x22&&data[4]!==0x26)) return null;
   if (data[5] !== 1) return null;
-  const off = dataOffset(data);
+  const off = 9;
   const bank = data[4] === 0x26 ? data[6] : data[6]&0x0F;
   const slot = data[4] === 0x26 ? data[8] : data[8]&0x7F;
   const unpacked=unpack7of8(Array.from(data).slice(off,data.length-1));
@@ -88,9 +92,11 @@ export function parsePatternDump(data) {
   if (!isAlesisDump(data, CONTENT_PATTERN)) return null;
   const slot=data[8]&0x7F, bank=data[6]&0x0F;
   const unpacked=unpackDump(data);
-  if (unpacked.length < 18) return null;
-  const name=decodeStr(unpacked.slice(0,14))||`Pat ${slot+1}`;
-  const {len,grid}=parseGridLen(unpacked);
+  const base=contentBase(unpacked);
+  if (unpacked.length < base+18) return null;
+  const name=decodeStr(unpacked.slice(base,base+14))||`Pat ${slot+1}`;
+  if (base > 0) return {name,bank,slot,len:16,grid:0.0625,type:'seq',steps:Array.from({length:64},()=>({notes:[],len:0.0625,prob:100}))};
+  const {len,grid}=parseGridLen(unpacked, 0);
   const type=unpacked[17]?'arp':'seq';
   const steps=[];
   let off=18;
@@ -103,12 +109,14 @@ export function parsePatternDump(data) {
 }
 
 export function parseRhythmDump(data) {
-  if (!isAlesisDump(data, CONTENT_SETUP)) return null;
+  if (!isAlesisDump(data, CONTENT_RHYTHM)) return null;
   const slot=data[8]&0x7F, bank=data[6]&0x0F;
   const unpacked=unpackDump(data);
-  if (unpacked.length < 19) return null;
-  const name=decodeStr(unpacked.slice(0,14))||`Rhythm ${slot+1}`;
-  const {len,grid}=parseGridLen(unpacked);
+  const base=contentBase(unpacked);
+  if (unpacked.length < base+19) return null;
+  const name=decodeStr(unpacked.slice(base,base+14))||`Rhythm ${slot+1}`;
+  if (base > 0) return {name,bank,slot,len:16,grid:0.0625,drums:[],isRhythm:true};
+  const {len,grid}=parseGridLen(unpacked, 0);
   const numDrums=unpacked[18]||0;
   if (numDrums === 0 || numDrums > 16) return null;
   const drums=[];
@@ -129,8 +137,7 @@ export function parseRhythmDump(data) {
 export function parseSetupDump(data) {
   const unpacked=unpackDump(data);
   if (unpacked.length<14) return null;
-  const hasPrefix = unpacked[0]===0x51&&unpacked[1]===0x30&&unpacked[2]===0x31;
-  const nameOff = hasPrefix ? 8 : 0;
-  const name=decodeStr(unpacked.slice(nameOff,nameOff+14))||'Setup';
-  return {name,isSetup:true,unpacked};
+  const base=contentBase(unpacked);
+  const name=decodeStr(unpacked.slice(base,base+14))||'Setup';
+  return {name,isSetup:true};
 }

@@ -4,7 +4,7 @@ import { parsePatchDump, requestPatch, sendPatchDump, storePatchToBank, sendRawS
 import { BANKS } from './micron-data.js';
 import { defaultPatch, sendAllParams } from './micron-patch.js';
 import { sendProgramChange } from './micron-midi.js';
-import { handleSysEx, setHandlerRender, restoreFromStorage, startCapture, stopCapture } from './micron-sysex-handler.js';
+import { handleSysEx, setHandlerRender, restoreFromStorage, startCapture, stopCapture, resetRxCounters } from './micron-sysex-handler.js';
 
 export { handleSysEx };
 window._startCapture = startCapture;
@@ -145,12 +145,13 @@ function importSyx() {
     const reader = new FileReader();
     reader.onload = ev => {
       const d = new Uint8Array(ev.target.result);
+      resetRxCounters();
       let i=0, count=0;
       while(i<d.length) {
         if(d[i]!==0xF0) { i++; continue; }
         const end=d.indexOf(0xF7,i); if(end<0) break;
         const msg = d.slice(i,end+1);
-        if (msg[1]===0&&msg[2]===0&&msg[3]===0x0E&&msg[4]===0x22) { handleSysEx(msg); count++; }
+        if (msg[1]===0&&msg[2]===0&&msg[3]===0x0E&&(msg[4]===0x22||msg[4]===0x26)) { handleSysEx(msg); count++; }
         i=end+1;
       }
       S.sysexLog=`Imported ${count} SysEx messages`; render();
