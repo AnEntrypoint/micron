@@ -1,6 +1,6 @@
 import { html } from './micron-ui-core.js';
 import { S, defaultRhythm } from './micron-state.js';
-import { parsePatchDump, parsePatternDump, parseRhythmDump, requestBankIndividual, requestPatch } from './micron-sysex.js';
+import { parsePatchDump, parsePatternDump, parseRhythmDump, requestBankIndividual, requestPatch, sendPatchDump } from './micron-sysex.js';
 import { BANKS } from './micron-data.js';
 import { defaultPatch, sendAllParams } from './micron-patch.js';
 import { sendProgramChange } from './micron-midi.js';
@@ -168,7 +168,6 @@ export function handleSysEx(data) {
       }
       if (bank===S.sysexSelectedBank) S.sysexBank[slot] = {name, params, raw};
       S.patch = {...defaultPatch(), ...params};
-      sendAllParams(S.patch);
       S.sysexLog = `Rx patch: "${name}" bank ${BANKS[bank]||bank} slot ${slot}`;
     }
   } else if (content === 3) {
@@ -231,9 +230,11 @@ function loadBankPatch(p, i) {
   if (p.raw) {
     const parsed = parsePatchDump(new Uint8Array(p.raw));
     if (parsed) params = parsed.params;
+    sendPatchDump(p.raw);
+  } else {
+    sendAllParams({...defaultPatch(), ...(params || {})});
   }
-  S.patch = {...defaultPatch(), ...params};
-  sendAllParams(S.patch);
+  S.patch = {...defaultPatch(), ...(params || {})};
   S.sysexLog = `Loaded "${p.name}" (slot ${i+1})`;
   render();
 }

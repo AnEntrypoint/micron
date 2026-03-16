@@ -2,7 +2,7 @@ import { html } from './micron-ui-core.js';
 import { S, addToLibrary, toggleFave, removeFromLibrary, saveState } from './micron-state.js';
 import { PATCH_CATEGORIES, BANKS } from './micron-data.js';
 import { defaultPatch, morphPatches, randomizePatch, sendAllParams, NRPN_MAP } from './micron-patch.js';
-import { parsePatchDump } from './micron-sysex.js';
+import { parsePatchDump, sendPatchDump } from './micron-sysex.js';
 
 const CAT_ICONS = ['🕐','⭐','🎸','🎵','🌊','🎻','🎺','🎹','🥁','🔥','✨'];
 
@@ -222,10 +222,12 @@ function loadBankPatchLib(p, i) {
   if (p.raw) {
     const parsed = parsePatchDump(new Uint8Array(p.raw));
     if (parsed) params = parsed.params;
+    sendPatchDump(p.raw);
+  } else {
+    if (!params) return;
+    sendAllParams({...defaultPatch(), ...params});
   }
-  if (!params) return;
-  S.patch = {...defaultPatch(), ...params};
-  sendAllParams(S.patch);
+  S.patch = {...defaultPatch(), ...(params || {})};
   render();
 }
 
