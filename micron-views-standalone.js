@@ -43,7 +43,7 @@ export function renderStandaloneTab() {
     <div class=section>
       <h4>Backup Everything from Synth</h4>
       <div class=hint-box style="margin-bottom:8px">
-        <b>To back up patterns, rhythms &amp; setups:</b> On the Micron, go to <b>Config → "Sysex: send all"</b> and push the knob. The synth will stream everything to the app automatically. Or send items individually: select item → push knob → "Send MIDI sysex?"
+        <b>To back up patterns, rhythms & setups:</b> On the Micron, go to <b>Config → "Sysex: send all"</b> and push the knob. The synth will stream everything to the app automatically. Or send items individually: select item → push knob → "Send MIDI sysex?"
       </div>
       <h4>Backup Patches ${hintToggle('backup','Requests all 512 patches (4 banks × 128) via SysEx. Takes ~2 min.')}</h4>
       ${S.syncProgress ? html`<div class=send-progress>

@@ -1,8 +1,9 @@
 import { html } from './micron-ui-core.js';
 import { S, defaultRhythm, addToLibrary } from './micron-state.js';
-import { parsePatchDump, parsePatternDump, parseRhythmDump, requestBankIndividual } from './micron-sysex.js';
+import { parsePatchDump, parsePatternDump, parseRhythmDump, requestBankIndividual, requestPatch } from './micron-sysex.js';
 import { BANKS } from './micron-data.js';
 import { defaultPatch, sendAllParams } from './micron-patch.js';
+import { sendProgramChange } from './micron-midi.js';
 
 const CONTENT_TYPES = ['patch','rhythm','pattern'];
 if (!S.sysexContentType) S.sysexContentType = 'patch';
@@ -91,8 +92,12 @@ export function renderSysExTab() {
           return html`<div class=${'bank-cell'+(p?' loaded':'')} title=${p?p.name:''} onclick=${()=>{if(p){loadBankPatch(p,i);}}}>
             <span class=bc-num>${i+1}</span>
             <span class=bc-name>${p?p.name:'—'}</span>
+            ${p?html`<button class=bc-recall title="Recall on synth then fetch edit buffer" onclick=${ev=>{ev.stopPropagation();recallOnSynth(S.sysexSelectedBank,i);}}>▶</button>`:null}
           </div>`;
         })}
+      </div>
+      <div class=btn-group style="margin-top:8px">
+        <button class=tbtn onclick=${()=>loadFromSynth()}>Load from Synth (Program Change + Fetch)</button>
       </div>
     </div>
   </div>`;
@@ -189,6 +194,26 @@ export function handleSysEx(data) {
     }
     S.sysexLog = `Rx setup/rhythm: "${name}" slot ${slot} [${data.length}b]`;
   }
+  render();
+}
+
+function recallOnSynth(bank, slot) {
+  sendProgramChange(bank, slot);
+  S.sysexLog = `Sent Program Change: bank ${BANKS[bank]||bank} slot ${slot+1}. Fetching edit buffer...`;
+  S._lastReqBank = 4;
+  S._lastReqSlot = 0;
+  setTimeout(() => { requestPatch(4, 0); render(); }, 150);
+  render();
+}
+
+function loadFromSynth() {
+  const bank = S.sysexSelectedBank;
+  const slot = S.sysexSelectedSlot;
+  sendProgramChange(bank, slot);
+  S.sysexLog = `Sent Program Change: bank ${BANKS[bank]||bank} slot ${slot+1}. Fetching edit buffer...`;
+  S._lastReqBank = 4;
+  S._lastReqSlot = 0;
+  setTimeout(() => { requestPatch(4, 0); render(); }, 150);
   render();
 }
 

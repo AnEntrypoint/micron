@@ -136,9 +136,13 @@ function outputTab() {
   return html`<div>
     ${sec('Output','cyan',
       pRow('Output Level','outputLevel',0,100),
-      html`<div class=pr><label>Patch Name</label><input type=text value=${S.patch.patchName||''} maxlength=14 class=name-in oninput=${e=>{S.patch.patchName=e.target.value;S.unsaved=true;if(NRPN_MAP.patchName)sendParam('patchName',e.target.value);window._micronRender?.();}} /></div>`
+      html`<div class=pr>
+        <label>Patch Name <span class=no-nrpn title="No NRPN — requires SysEx to send to synth">no NRPN</span></label>
+        <input type=text value=${S.patch.patchName||''} maxlength=14 class=name-in oninput=${e=>{S.patch.patchName=e.target.value;S.unsaved=true;window._micronRender?.();}} />
+      </div>`
     )}
     ${sec('Knob Assignments','cyan',
+      html`<p class=hint style="margin:0 0 6px">Knob assignments are stored locally only — no confirmed NRPN to send live changes.</p>`,
       pRow('Knob X','knobX',0,161),
       pRow('Knob Y','knobY',0,161),
       pRow('Knob Z','knobZ',0,161)

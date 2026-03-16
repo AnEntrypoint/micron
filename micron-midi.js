@@ -50,6 +50,13 @@ export function sendNRPN(nrpn, val) {
 }
 
 export function sendCC(cc, val) { midiOut([0xB0|(M.channel-1), cc, val&127]); }
+export function sendProgramChange(bank, slot) {
+  if (!M.output) return;
+  const ch = (M.channel - 1) & 0x0F;
+  midiOut([0xB0|ch, 0, 0]);
+  midiOut([0xB0|ch, 32, bank & 0x7F]);
+  midiOut([0xC0|ch, slot & 0x7F]);
+}
 export function sendNoteOn(p, v, ch) {
   const vel = applyVelCurve(v);
   midiOut([0x90|((ch??M.channel)-1), p, vel]);

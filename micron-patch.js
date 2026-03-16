@@ -53,12 +53,9 @@ export const NRPN_MAP = {
   lfo2M1:{n:112,min:0,max:100},
   shSync:{n:113,min:0,max:1}, shRate:{n:114,min:0,max:1023}, shReset:{n:115,min:0,max:4},
   shInput:{n:116,min:0,max:114}, shSmooth:{n:117,min:0,max:100},
-  trkInput:{n:118,min:0,max:79}, trkPreset:{n:119,min:0,max:9},
-  trkPoints:{n:120,min:0,max:1},
-  category:{n:160,min:0,max:10}, knobX:{n:161,min:0,max:161}, knobY:{n:162,min:0,max:161},
-  knobZ:{n:163,min:0,max:161}, f2OffsetFreq:{n:164,min:-400,max:400},
-  lfo1SyncRate:{n:165,min:0,max:24}, lfo2SyncRate:{n:166,min:0,max:24},
-  shSyncRate:{n:167,min:0,max:24},
+  trkInput:{n:168,min:0,max:79}, trkPreset:{n:169,min:0,max:9},
+  trkPoints:{n:170,min:0,max:1},
+  // category/knobX/Y/Z/f2OffsetFreq/lfoSyncRates have no confirmed NRPN (would collide with mod offsets 157-168)
   arpPattern:{n:200,min:0,max:31}, arpMult:{n:201,min:0,max:6}, arpLength:{n:202,min:0,max:14},
   arpOctRange:{n:203,min:0,max:4}, arpSpan:{n:204,min:0,max:2}, arpOrder:{n:205,min:0,max:5},
   arpMode:{n:206,min:0,max:2}, arpTempo:{n:207,min:500,max:2500},
@@ -70,7 +67,8 @@ for (let i=0;i<12;i++) {
   NRPN_MAP[`mod${i+1}Lvl`] = {n:123+i*3, min:-1000, max:1000};
 }
 for (let i=0;i<12;i++) NRPN_MAP[`mod${i+1}Off`] = {n:157+i, min:-1000, max:1000};
-for (let i=0;i<33;i++) NRPN_MAP[`trkY${i}`] = {n:169+i, min:-100, max:100};
+// trkY: 16-point = indices 0-15 at NRPNs 171-186; 12-point = indices 0-12 at 171-183
+for (let i=0;i<33;i++) NRPN_MAP[`trkY${i}`] = {n:171+i, min:-100, max:100};
 for (let i=0;i<8;i++) NRPN_MAP[`fx1P${String.fromCharCode(65+i)}`] = {n:220+i, min:-100, max:127};
 for (let i=0;i<6;i++) NRPN_MAP[`fx2P${String.fromCharCode(65+i)}`] = {n:228+i, min:-128, max:127};
 
