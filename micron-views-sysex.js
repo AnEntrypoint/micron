@@ -4,9 +4,11 @@ import { parsePatchDump, requestPatch, sendPatchDump, storePatchToBank, sendRawS
 import { BANKS } from './micron-data.js';
 import { defaultPatch, sendAllParams } from './micron-patch.js';
 import { sendProgramChange } from './micron-midi.js';
-import { handleSysEx, setHandlerRender, restoreFromStorage } from './micron-sysex-handler.js';
+import { handleSysEx, setHandlerRender, restoreFromStorage, startCapture, stopCapture } from './micron-sysex-handler.js';
 
 export { handleSysEx };
+window._startCapture = startCapture;
+window._stopCapture = stopCapture;
 
 if (!S.sysexBanks) S.sysexBanks = [Array(128).fill(null),Array(128).fill(null),Array(128).fill(null),Array(128).fill(null)];
 if (!S.sysexPatterns) S.sysexPatterns = Array(128).fill(null);

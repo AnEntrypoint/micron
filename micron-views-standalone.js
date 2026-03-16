@@ -35,6 +35,10 @@ export function renderStandaloneTab() {
         <div class=stat-badge><span class=stat-num>${rhythmCount}</span><span class=stat-label>rhythms</span></div>
       </div>
       <p style="margin:8px 0 0;font-size:0.85em;opacity:0.7">Or send items individually: select item on Micron → push knob → "Send MIDI sysex?"</p>
+      <div class=btn-group style="margin-top:8px">
+        <button class=tbtn onclick=${()=>{window._startCapture?.();render();}}>Start Capture</button>
+        <button class=tbtn onclick=${()=>{window._stopCapture?.();render();}}>Stop & Save .syx</button>
+      </div>
     </div>
 
     <div class=section>

@@ -6,6 +6,23 @@ import { BANKS } from './micron-data.js';
 let render = ()=>{};
 export function setHandlerRender(fn) { render=fn; }
 
+let _captureBuffer = [];
+let _capturing = false;
+
+export function startCapture() { _captureBuffer = []; _capturing = true; console.log('SysEx capture started'); }
+export function stopCapture() {
+  _capturing = false;
+  if (!_captureBuffer.length) { console.log('No SysEx captured'); return; }
+  const allBytes = _captureBuffer.flatMap(msg => Array.from(msg));
+  const blob = new Blob([new Uint8Array(allBytes)], {type:'application/octet-stream'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'micron-capture.syx'; a.click();
+  URL.revokeObjectURL(url);
+  console.log(`Captured ${_captureBuffer.length} SysEx messages, ${allBytes.length} bytes total`);
+  S.sysexLog = `Captured ${_captureBuffer.length} messages → micron-capture.syx`;
+  render();
+}
+
 export function restoreFromStorage() {
   let restored = 0;
   for (let b = 0; b < 4; b++) for (let s = 0; s < 128; s++) {
@@ -33,6 +50,7 @@ export function restoreFromStorage() {
 }
 
 export function handleSysEx(data) {
+  if (_capturing) _captureBuffer.push(Array.from(data));
   const hex = Array.from(data).map(b=>b.toString(16).padStart(2,'0')).join(' ');
   if (!(data[1]===0x00&&data[2]===0x00&&data[3]===0x0E&&data[4]===0x22)) {
     S.sysexLog = `Rx non-Alesis: [${data.length}b] ${hex.slice(0,120)}`;
