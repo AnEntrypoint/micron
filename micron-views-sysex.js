@@ -1,5 +1,5 @@
 import { html } from './micron-ui-core.js';
-import { S, defaultRhythm, addToLibrary } from './micron-state.js';
+import { S, defaultRhythm } from './micron-state.js';
 import { parsePatchDump, parsePatternDump, parseRhythmDump, requestBankIndividual, requestPatch } from './micron-sysex.js';
 import { BANKS } from './micron-data.js';
 import { defaultPatch, sendAllParams } from './micron-patch.js';
@@ -7,19 +7,20 @@ import { sendProgramChange } from './micron-midi.js';
 
 const CONTENT_TYPES = ['patch','rhythm','pattern'];
 if (!S.sysexContentType) S.sysexContentType = 'patch';
-if (!S.sysexBanks) {
-  S.sysexBanks = [Array(128).fill(null),Array(128).fill(null),Array(128).fill(null),Array(128).fill(null)];
-  S.sysexPatterns = Array(128).fill(null);
-  S.sysexSetups = Array(128).fill(null);
+if (!S.sysexBanks) S.sysexBanks = [Array(128).fill(null),Array(128).fill(null),Array(128).fill(null),Array(128).fill(null)];
+if (!S.sysexPatterns) S.sysexPatterns = Array(128).fill(null);
+if (!S.sysexSetups) S.sysexSetups = Array(128).fill(null);
+{
   let restored = 0;
   for (let b = 0; b < 4; b++) for (let s = 0; s < 128; s++) {
+    if (S.sysexBanks[b][s]) continue;
     try { const item = localStorage.getItem(`micron_patch_${b}_${s}`);
-      if (item) { const d = JSON.parse(item); S.sysexBanks[b][s] = d; restored++; } } catch(_) {}
+      if (item) { S.sysexBanks[b][s] = JSON.parse(item); restored++; } } catch(_) {}
   }
   for (let s = 0; s < 128; s++) {
-    try { const item = localStorage.getItem(`micron_pattern_${s}`);
+    if (!S.sysexPatterns[s]) try { const item = localStorage.getItem(`micron_pattern_${s}`);
       if (item) { S.sysexPatterns[s] = JSON.parse(item); restored++; } } catch(_) {}
-    try { const item = localStorage.getItem(`micron_setup_${s}`);
+    if (!S.sysexSetups[s]) try { const item = localStorage.getItem(`micron_setup_${s}`);
       if (item) { S.sysexSetups[s] = JSON.parse(item); restored++; } } catch(_) {}
   }
   if (restored) console.log(`Restored ${restored} items from localStorage`);
@@ -160,7 +161,6 @@ export function handleSysEx(data) {
       S.patch = {...defaultPatch(), ...params};
       sendAllParams(S.patch);
       S.sysexLog = `Rx patch: "${name}" bank ${BANKS[bank]||bank} slot ${slot}`;
-      addToLibrary(name, params, params.category||0);
     }
   } else if (content === 3) {
     const raw = Array.from(data);

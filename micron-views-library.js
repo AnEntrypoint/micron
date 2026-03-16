@@ -218,15 +218,15 @@ function showToast(msg) {
 }
 
 function loadBankPatchLib(p, i) {
-  import('./micron-patch.js').then(({defaultPatch, sendAllParams}) => {
-    import('./micron-sysex.js').then(({parsePatchDump}) => {
-      let params = p.params;
-      if (p.raw) { const parsed = parsePatchDump(new Uint8Array(p.raw)); if (parsed) params = parsed.params; }
-      S.patch = {...defaultPatch(), ...params};
-      sendAllParams(S.patch);
-      render();
-    });
-  });
+  let params = p.params;
+  if (p.raw) {
+    const parsed = parsePatchDump(new Uint8Array(p.raw));
+    if (parsed) params = parsed.params;
+  }
+  if (!params) return;
+  S.patch = {...defaultPatch(), ...params};
+  sendAllParams(S.patch);
+  render();
 }
 
 function editBankPatchLib(p, i) {

@@ -133,7 +133,10 @@ export function loadState() {
     if (d.splitCh2) S.splitCh2 = d.splitCh2;
     if (d.layerEnabled!=null) S.layerEnabled = d.layerEnabled;
     if (d.layerChannels) S.layerChannels = d.layerChannels;
-    if (d.library) S.library = d.library;
+    if (d.library) {
+      const seen = new Set();
+      S.library = d.library.filter(p => { if (seen.has(p.name)) return false; seen.add(p.name); return true; });
+    }
     if (d.sysexBank) S.sysexBank = d.sysexBank;
     if (d.sysexBanks) S.sysexBanks = d.sysexBanks.map(b => Array.isArray(b) ? b : Array(128).fill(null));
     if (d.collapsedSections) S.collapsedSections = d.collapsedSections;
@@ -156,6 +159,8 @@ export function popUndo() {
 }
 
 export function addToLibrary(name, patch, category=0) {
+  const exists = S.library.some(p => p.name === name);
+  if (exists) return;
   S.library.unshift({id: Date.now(), name, patch: {...patch}, category, fave: false, created: new Date().toISOString()});
   if (S.library.length > 500) S.library.length = 500;
   saveState();
