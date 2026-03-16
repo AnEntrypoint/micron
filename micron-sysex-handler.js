@@ -110,7 +110,7 @@ function handlePatternSysEx(data) {
     S.sysexPatterns[slot] = {name, raw};
     try { localStorage.setItem(`micron_pattern_${slot}`, JSON.stringify({name, raw})); } catch(_) {}
   }
-  if (parsed) {
+  if (parsed && !parsed.rawFormat) {
     const { len, grid, type, steps } = parsed;
     while (S.patterns.length <= slot) S.patterns.push({name:`Pat ${S.patterns.length+1}`,len:16,grid:0.0625,type:'seq',steps:Array.from({length:64},()=>({notes:[],len:0.0625,prob:100}))});
     S.patterns[slot] = { name, len, grid, type, steps };

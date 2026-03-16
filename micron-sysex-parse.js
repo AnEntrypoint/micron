@@ -95,7 +95,7 @@ export function parsePatternDump(data) {
   const base=contentBase(unpacked);
   if (unpacked.length < base+18) return null;
   const name=decodeStr(unpacked.slice(base,base+14))||`Pat ${slot+1}`;
-  if (base > 0) return {name,bank,slot,len:16,grid:0.0625,type:'seq',steps:Array.from({length:64},()=>({notes:[],len:0.0625,prob:100}))};
+  if (base > 0) return {name,bank,slot,rawFormat:true};
   const {len,grid}=parseGridLen(unpacked, 0);
   const type=unpacked[17]?'arp':'seq';
   const steps=[];
@@ -115,7 +115,7 @@ export function parseRhythmDump(data) {
   const base=contentBase(unpacked);
   if (unpacked.length < base+19) return null;
   const name=decodeStr(unpacked.slice(base,base+14))||`Rhythm ${slot+1}`;
-  if (base > 0) return {name,bank,slot,len:16,grid:0.0625,drums:[],isRhythm:true};
+  if (base > 0) return {name,bank,slot,rawFormat:true,isRhythm:true};
   const {len,grid}=parseGridLen(unpacked, 0);
   const numDrums=unpacked[18]||0;
   if (numDrums === 0 || numDrums > 16) return null;
