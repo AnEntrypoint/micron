@@ -33,7 +33,7 @@ export function restoreFromStorage() {
     try { const item = localStorage.getItem(`micron_patch_${b}_${s}`);
       if (item) { S.sysexBanks[b][s] = JSON.parse(item); restored++; } } catch(_) {}
   }
-  for (let s = 0; s < 128; s++) {
+  for (let s = 0; s < 256; s++) {
     if (!S.sysexPatterns[s]) try { const item = localStorage.getItem(`micron_pattern_${s}`);
       if (item) { S.sysexPatterns[s] = JSON.parse(item); restored++; } } catch(_) {}
     if (!S.sysexSetups[s]) try { const item = localStorage.getItem(`micron_setup_${s}`);

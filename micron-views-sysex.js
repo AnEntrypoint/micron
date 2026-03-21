@@ -11,9 +11,9 @@ window._startCapture = startCapture;
 window._stopCapture = stopCapture;
 
 if (!S.sysexBanks) S.sysexBanks = [Array(128).fill(null),Array(128).fill(null),Array(128).fill(null),Array(128).fill(null)];
-if (!S.sysexPatterns) S.sysexPatterns = Array(128).fill(null);
-if (!S.sysexSetups) S.sysexSetups = Array(128).fill(null);
-if (!S.sysexRhythms) S.sysexRhythms = Array(128).fill(null);
+if (!S.sysexPatterns) S.sysexPatterns = Array(256).fill(null);
+if (!S.sysexSetups) S.sysexSetups = Array(256).fill(null);
+if (!S.sysexRhythms) S.sysexRhythms = Array(256).fill(null);
 if (!S.storeSlot) S.storeSlot = 0;
 restoreFromStorage();
 
