@@ -12,7 +12,7 @@ import { renderRhythmTab, setRender as rhythmSetRender } from './micron-views-rh
 import { renderConfigTab, setRender as configSetRender } from './micron-views-config.js';
 import { renderStandaloneTab, setRender as standaloneSetRender } from './micron-views-standalone.js';
 import { drawRoll, schedulePlayback, initRoll } from './micron-sequencer.js';
-import { NOTE_NAMES, velColor } from './micron-data.js';
+import { NOTE_NAMES, velColor, SCALES } from './micron-data.js';
 import { TABS, render as schedRender, setRenderFn } from './micron-ui-core.js';
 let rollCanvas, velCanvas, audioCtx;
 
@@ -62,6 +62,13 @@ function renderSeqTab() {
       <span class=pv>${S.swingAmt}%</span>
       <button class=tbtn onclick=${()=>clearPat()}>Clear</button>
       ${S.unsaved?html`<span class=unsaved-ind>●</span>`:null}
+      <span class=sep></span>
+      <select class=qc-sel onchange=${e=>{S.scaleRoot=+e.target.value;schedRender();}}>
+        ${NOTE_NAMES.map((n,i)=>html`<option value=${i} selected=${(S.scaleRoot??0)===i}>${n}</option>`)}
+      </select>
+      <select class=qc-sel onchange=${e=>{S.scaleName=e.target.value;schedRender();}}>
+        ${Object.keys(SCALES).map(k=>html`<option value=${k} selected=${(S.scaleName??'Chromatic')===k}>${k}</option>`)}
+      </select>
     </div>
     ${renderStepGrid()}
   </div>`;
@@ -93,6 +100,9 @@ function renderNotePicker(si, s) {
   const octave = Math.floor(pitch / 12) - 1;
   const semitone = pitch % 12;
   const WHITES = [0,2,4,5,7,9,11], BLACKS = [1,3,-1,6,8,10,-1];
+  const scaleIntervals = SCALES[S.scaleName??'Chromatic'];
+  const root = S.scaleRoot ?? 0;
+  const inScale = semi => !scaleIntervals || scaleIntervals.includes(((semi - root) % 12 + 12) % 12);
   return html`<div class=note-picker>
     <div class=np-row>
       <label>Step ${si+1}</label>
@@ -106,11 +116,11 @@ function renderNotePicker(si, s) {
     </div>
     <div class=np-kb>
       ${WHITES.map((semi,wi)=>html`<div
-        class=${'np-wk'+(semitone===semi?' active':'')}
+        class=${'np-wk'+(semitone===semi?' active':'')+(inScale(semi)?'':' np-off-scale')}
         onclick=${()=>{const p=octave*12+12+semi;setStepNote(si,p,note.vel,note.len);previewNote(p,100);}}
       >${NOTE_NAMES[semi]}</div>`)}
       ${BLACKS.map((semi,bi)=>semi>=0?html`<div
-        class=${'np-bk'+(semitone===semi?' active':'')}
+        class=${'np-bk'+(semitone===semi?' active':'')+(inScale(semi)?'':' np-off-scale')}
         style=${'left:'+(bi*14.28+10)+'%'}
         onclick=${e=>{e.stopPropagation();const p=octave*12+12+semi;setStepNote(si,p,note.vel,note.len);previewNote(p,100);}}
       ></div>`:null)}

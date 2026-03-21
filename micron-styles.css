@@ -270,3 +270,5 @@ input[type=checkbox]:checked::after{content:'';position:absolute;top:2px;left:5p
 .np-bk{position:absolute;top:0;width:10%;height:33px;background:#0a0b10;border:1px solid var(--border);border-radius:0 0 3px 3px;cursor:pointer;z-index:2;transition:background .08s}
 .np-bk:hover{background:#1a1d2e}
 .np-bk.active{background:#001824;border-color:var(--cyan)}
+.np-wk.np-off-scale{opacity:0.3;cursor:default}
+.np-bk.np-off-scale{opacity:0.2;cursor:default}
