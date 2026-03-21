@@ -49,6 +49,19 @@ export function restoreFromStorage() {
       } catch(_) {}
     }
   }
+  for (let s = 0; s < 256; s++) {
+    const sp = S.sysexPatterns[s];
+    if (sp?.raw) {
+      try {
+        const parsed = parsePatternDump(new Uint8Array(sp.raw));
+        if (parsed && !parsed.rawFormat) {
+          const { name, len, grid, type, steps } = parsed;
+          while (S.patterns.length <= s) S.patterns.push({name:`Pat ${S.patterns.length+1}`,len:16,grid:0.0625,type:'seq',steps:Array.from({length:64},()=>({notes:[],len:0.0625,prob:100}))});
+          S.patterns[s] = { name, len, grid, type, steps };
+        }
+      } catch(_) {}
+    }
+  }
   if (restored) console.log(`Restored ${restored} items from localStorage`);
 }
 
