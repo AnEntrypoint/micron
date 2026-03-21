@@ -126,10 +126,11 @@ export function schedulePlayback(audioCtx) {
     if (Math.random()*100 < (s.prob??100)) {
       const swingOffset = (si%2===1) ? swing * secPerBeat * 0.5 : 0;
       const t = S.playTime + swingOffset;
+      const msFromNow = Math.max(0, (t - now) * 1000);
       s.notes.forEach(n => {
         const pitch = n.pitch + S.globalTranspose;
-        sendNoteOn(pitch, n.vel, undefined);
-        setTimeout(() => sendNoteOff(pitch), Math.max(50, n.len * secPerBeat * 1000 * 0.9));
+        const durMs = Math.max(50, n.len * secPerBeat * 1000 * 0.9);
+        setTimeout(() => { sendNoteOn(pitch, n.vel, undefined); setTimeout(() => sendNoteOff(pitch), durMs); }, msFromNow);
       });
       if (S.metronome && si%4===0) playClick(audioCtx, t);
     }
