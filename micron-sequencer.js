@@ -119,7 +119,7 @@ export function setPlaybackCanvases(roll, vel) { _rollRef = roll; _velRef = vel;
 export function schedulePlayback(audioCtx) {
   if (!S.playing) return;
   const now = audioCtx.currentTime;
-  const beatsPerStep = pat().grid || S.stepLen;
+  const beatsPerStep = (pat().grid || S.stepLen) * 4;
   const secPerBeat = 60 / S.bpm;
   const swing = S.swingAmt / 100;
   while (S.playTime < now + 0.1) {
@@ -131,7 +131,7 @@ export function schedulePlayback(audioCtx) {
       const msFromNow = Math.max(0, (t - now) * 1000);
       s.notes.forEach(n => {
         const pitch = n.pitch + S.globalTranspose;
-        const durMs = Math.max(50, n.len * secPerBeat * 1000 * 0.9);
+        const durMs = Math.max(50, n.len * 4 * secPerBeat * 1000 * 0.9);
         setTimeout(() => { sendNoteOn(pitch, n.vel, undefined); setTimeout(() => sendNoteOff(pitch), durMs); }, msFromNow);
       });
       if (S.metronome && si%4===0) playClick(audioCtx, t);
