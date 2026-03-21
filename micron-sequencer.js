@@ -1,7 +1,6 @@
 import { S, pat, step, saveState } from './micron-state.js';
 import { sendNoteOn, sendNoteOff, M } from './micron-midi.js';
 import { noteColor, velColor, isBlack, NOTE_NAMES, stepFracLabel } from './micron-data.js';
-import { render as schedRender } from './micron-ui-core.js';
 
 const VEL_H = 38, RULER_H = 18;
 const STEP_LENS = [0.03125,0.0625,0.125,0.25,0.5,1,1.5,2,3,4];
@@ -114,6 +113,9 @@ function drawVel(canvas) {
   }
 }
 
+let _rollRef = null, _velRef = null;
+export function setPlaybackCanvases(roll, vel) { _rollRef = roll; _velRef = vel; }
+
 export function schedulePlayback(audioCtx) {
   if (!S.playing) return;
   const now = audioCtx.currentTime;
@@ -138,7 +140,7 @@ export function schedulePlayback(audioCtx) {
     S.playTime += beatsPerStep * secPerBeat;
     S.barBeat = si;
   }
-  schedRender();
+  if (_rollRef) drawRoll(_rollRef, _velRef);
   S.schedTimer = requestAnimationFrame(() => schedulePlayback(audioCtx));
 }
 

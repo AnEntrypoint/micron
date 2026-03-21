@@ -11,7 +11,7 @@ import { renderLibraryTab, setRender as libSetRender } from './micron-views-libr
 import { renderRhythmTab, setRender as rhythmSetRender } from './micron-views-rhythm.js';
 import { renderConfigTab, setRender as configSetRender } from './micron-views-config.js';
 import { renderStandaloneTab, setRender as standaloneSetRender } from './micron-views-standalone.js';
-import { drawRoll, schedulePlayback, initRoll } from './micron-sequencer.js';
+import { drawRoll, schedulePlayback, initRoll, setPlaybackCanvases } from './micron-sequencer.js';
 import { NOTE_NAMES, velColor, SCALES } from './micron-data.js';
 import { TABS, render as schedRender, setRenderFn } from './micron-ui-core.js';
 let rollCanvas, velCanvas, audioCtx;
@@ -46,10 +46,10 @@ function renderSeqTab() {
       ${synthPat ? html`<span class=seq-pat-label style="font-size:9px;color:var(--text3)">slot ${S.patIdx}</span>` : null}
     </div>
     <div class=roll-container style=${'height:'+S.rollH+'px'}>
-      <canvas id=roll-canvas style="width:100%;height:100%;display:block" ref=${el=>{if(el&&el!==rollCanvas){rollCanvas=el;initRoll(rollCanvas,velCanvas);setupCanvas(el);}}}></canvas>
+      <canvas id=roll-canvas style="width:100%;height:100%;display:block" ref=${el=>{if(el&&el!==rollCanvas){rollCanvas=el;initRoll(rollCanvas,velCanvas);setupCanvas(el);setPlaybackCanvases(rollCanvas,velCanvas);}}}></canvas>
     </div>
     <div class=roll-resizer onmousedown=${startResize}></div>
-    <canvas id=vel-canvas style="width:100%;height:38px;display:block;cursor:ns-resize" ref=${el=>{if(el&&el!==velCanvas){velCanvas=el;setupCanvas(el);}}}></canvas>
+    <canvas id=vel-canvas style="width:100%;height:38px;display:block;cursor:ns-resize" ref=${el=>{if(el&&el!==velCanvas){velCanvas=el;setupCanvas(el);setPlaybackCanvases(rollCanvas,velCanvas);}}}></canvas>
     <div class=seq-controls>
       ${[8,12,16,24,32,48,64].map(l=>html`<button class=${'slen-btn'+(p.len===l?' active':'')} onclick=${()=>{changeLen(l);}}>L${l}</button>`)}
       <span class=sep></span>
