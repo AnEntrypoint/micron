@@ -11,30 +11,34 @@ function contentBase(unpacked) {
   return 0;
 }
 function parseGridLen(u, base) { const b=base||0; const len=u[b+15]||16,div=u[b+16]||16; return {len,grid:div>0?1/div:0.0625}; }
-const TICKS_PER_BAR = 2048;
-const TICKS_PER_STEP = 128;
 const STEPS_PER_BAR = 16;
 function parseMicronPattern(u, base, name, bank, slot) {
-  const noteCount = u[base + 27];
+  const noteCount = u[base + 27] & 0x7F;
   const ccCount = u[base + 31];
   const evtStart = base + 35;
   const events = [];
   for (let i = 0; i < noteCount && evtStart + i * 8 + 7 < u.length; i++) {
     const off = evtStart + i * 8;
-    const dur = u[off];
-    const pitch = s8(u[off + 2]);
-    const vel = u[off + 4];
-    const timeTicks = (u[off + 5] << 8) | u[off + 6];
-    events.push({ pitch, vel, dur, time: timeTicks, step: Math.round(timeTicks / TICKS_PER_STEP) });
+    const dur = u[off] & 0x7F;
+    const b1 = u[off + 1];
+    const b2raw = u[off + 2];
+    const vel = u[off + 4] & 0x7F;
+    const b5 = u[off + 5];
+    const noteLenTicks = u[off + 6];
+    const step = (b5 >> 7) * STEPS_PER_BAR + (b5 & 0x7F);
+    // b1=127/255 events store pitch as "128 - semitones_below_C4"; b1=0 events store relative semitones above C4
+    const pitch = (b1 === 0x7F || b1 === 0xFF) ? 60 - (128 - (b2raw & 0x7F)) : 60 + (b2raw & 0x7F);
+    if (step < 256) events.push({ pitch, vel, dur, noteLenTicks, step });
   }
-  const maxTime = events.reduce((m, e) => Math.max(m, e.time), 0);
-  const bars = Math.max(1, Math.ceil((maxTime + 1) / TICKS_PER_BAR));
+  const maxStep = events.reduce((m, e) => Math.max(m, e.step), 0);
+  const bars = Math.max(1, Math.ceil((maxStep + 1) / STEPS_PER_BAR));
   const len = bars * STEPS_PER_BAR;
   const grid = 1 / STEPS_PER_BAR;
   const steps = Array.from({length: Math.max(len, 16)}, () => ({notes: [], len: grid, prob: 100}));
   events.forEach(e => {
     if (e.step >= 0 && e.step < steps.length) {
-      steps[e.step].notes.push({pitch: 60 + e.pitch, vel: e.vel, len: e.dur / TICKS_PER_STEP});
+      const noteLen = e.noteLenTicks > 64 ? grid * 2 : grid;
+      steps[e.step].notes.push({pitch: Math.max(0, Math.min(127, e.pitch)), vel: e.vel || 100, len: noteLen});
     }
   });
   return {name, bank, slot, len, grid, type: 'seq', steps, micronFormat: true, noteCount, ccCount};
