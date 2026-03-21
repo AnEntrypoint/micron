@@ -49,6 +49,10 @@ export function restoreFromStorage() {
       } catch(_) {}
     }
   }
+  if (restored) console.log(`Restored ${restored} items from localStorage`);
+}
+
+export function reparsePatternsFromRaw() {
   for (let s = 0; s < 256; s++) {
     const sp = S.sysexPatterns[s];
     if (sp?.raw) {
@@ -62,7 +66,6 @@ export function restoreFromStorage() {
       } catch(_) {}
     }
   }
-  if (restored) console.log(`Restored ${restored} items from localStorage`);
 }
 
 export function handleSysEx(data) {

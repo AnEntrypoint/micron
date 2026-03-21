@@ -4,6 +4,7 @@ const html = htm.bind(createElement);
 import { S, loadState, saveState, pat } from './micron-state.js';
 import { M, initMIDI, allNotesOff, logMidi, setClockSend, previewNote } from './micron-midi.js';
 import { handleSysEx as sysexHandler, renderSysExTab, setRender as sysexSetRender } from './micron-views-sysex.js';
+import { reparsePatternsFromRaw } from './micron-sysex-handler.js';
 import { renderPatchTab } from './micron-views-patch.js';
 import { renderPatternsTab, setRender as patSetRender, loadSynthPattern } from './micron-views-patterns.js';
 import { renderMIDITab, setRender as midiSetRender } from './micron-views-midi.js';
@@ -370,6 +371,7 @@ async function syncFromSynth() {
 }
 
 loadState();
+reparsePatternsFromRaw();
 const attachMidi = () => M.access?.inputs.forEach(i=>{ i.onmidimessage=handleMidiMsg; });
 let _syncCalled = false;
 function syncOnce() { if (!_syncCalled) { _syncCalled = true; syncFromSynth(); } }
