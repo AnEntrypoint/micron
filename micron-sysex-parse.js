@@ -25,6 +25,9 @@ function parseMicronPattern(u, base, name, bank, slot) {
     const vel = u[off + 4] & 0x7F;
     const b5 = u[off + 5];
     const noteLenTicks = u[off + 6];
+    const b7 = u[off + 7];
+    // b7 >= 0x20 marks loop-end/structural markers, not real notes — skip them
+    if (b7 >= 0x20) continue;
     const step = (b5 >> 7) * STEPS_PER_BAR + (b5 & 0x7F);
     // b1=127/255 events store pitch as "128 - semitones_below_C4"; b1=0 events store relative semitones above C4
     const pitch = (b1 === 0x7F || b1 === 0xFF) ? 60 - (128 - (b2raw & 0x7F)) : 60 + (b2raw & 0x7F);
