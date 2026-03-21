@@ -5,7 +5,7 @@ import { S, loadState, saveState, pat } from './micron-state.js';
 import { M, initMIDI, allNotesOff, logMidi, setClockSend } from './micron-midi.js';
 import { handleSysEx as sysexHandler, renderSysExTab, setRender as sysexSetRender } from './micron-views-sysex.js';
 import { renderPatchTab } from './micron-views-patch.js';
-import { renderPatternsTab, setRender as patSetRender } from './micron-views-patterns.js';
+import { renderPatternsTab, setRender as patSetRender, loadSynthPattern } from './micron-views-patterns.js';
 import { renderMIDITab, setRender as midiSetRender } from './micron-views-midi.js';
 import { renderLibraryTab, setRender as libSetRender } from './micron-views-library.js';
 import { renderRhythmTab, setRender as rhythmSetRender } from './micron-views-rhythm.js';
@@ -35,7 +35,16 @@ function handleMidiMsg(e) {
 window._midiHandler = handleMidiMsg;
 function renderSeqTab() {
   const p = pat();
+  const synthPat = S.sysexPatterns?.[S.patIdx];
   return html`<div>
+    <div class=seq-pat-bar>
+      <span class=seq-pat-label>Editing:</span>
+      <span class=seq-pat-name>${p.name || `Pat ${S.patIdx+1}`}</span>
+      <button class=tbtn onclick=${()=>{S.tab='patterns';schedRender();}} title="Browse patterns">Browse</button>
+      ${synthPat ? html`<button class=tbtn onclick=${()=>navSynthPat(-1)}>◀</button>` : null}
+      ${synthPat ? html`<button class=tbtn onclick=${()=>navSynthPat(1)}>▶</button>` : null}
+      ${synthPat ? html`<span class=seq-pat-label style="font-size:9px;color:var(--text3)">slot ${S.patIdx}</span>` : null}
+    </div>
     <div class=roll-container style=${'height:'+S.rollH+'px'}>
       <canvas id=roll-canvas style="width:100%;height:100%;display:block" ref=${el=>{if(el&&el!==rollCanvas){rollCanvas=el;initRoll(rollCanvas,velCanvas);setupCanvas(el);}}}></canvas>
     </div>
@@ -84,6 +93,14 @@ function changeLen(l) {
 }
 
 function clearPat() { pat().steps.forEach(s=>{s.notes=[];}); S.unsaved=true; schedRender(); }
+
+function navSynthPat(dir) {
+  const filled = (S.sysexPatterns||[]).map((p,i)=>p?i:-1).filter(i=>i>=0);
+  if (!filled.length) return;
+  const cur = filled.indexOf(S.patIdx);
+  const next = filled[Math.max(0, Math.min(filled.length-1, cur < 0 ? 0 : cur+dir))];
+  if (next !== undefined && next !== S.patIdx) loadSynthPattern(next);
+}
 
 function togglePlay() {
   if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();

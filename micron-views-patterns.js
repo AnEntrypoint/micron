@@ -152,35 +152,49 @@ function exportPatternsJSON() {
 
 function renderFromSynth() {
   const entries = (S.sysexPatterns || []).map((p, i) => p ? {p, i} : null).filter(Boolean);
-  return html`<div class=section>
+  if (entries.length === 0) return html`<div class=section>
     <h4>From Synth</h4>
-    ${entries.length === 0
-      ? html`<div class=hint>No patterns received from synth yet. On Micron: [patterns] → select → push knob → "Send MIDI sysex?"</div>`
-      : html`<div class=standalone-list>
-          ${entries.map(({p, i}) => html`<div class=standalone-slot>
-            <span class=slot-name>${p.name || `Pattern ${i+1}`}</span>
-            <span class=slot-info>slot ${i}</span>
-            <button class=tbtn onclick=${() => loadSynthPattern(i)}>Load</button>
-          </div>`)}
-        </div>`}
+    <div class=hint>No patterns received from synth yet. On Micron: [patterns] → select → push knob → "Send MIDI sysex?"</div>
+  </div>`;
+  const loaded = entries.filter(({i}) => S.patterns[i] && S.patterns[i].steps?.some(s=>s.notes?.length>0));
+  const filter = S.synthPatFilter || '';
+  const visible = entries.filter(({p}) => !filter || (p.name||'').toLowerCase().includes(filter.toLowerCase()));
+  return html`<div class=section>
+    <h4>From Synth (${entries.length})</h4>
+    <input placeholder="Search synth patterns..." value=${filter} oninput=${e=>{S.synthPatFilter=e.target.value;render();}} class=search-in />
+    <div class=synth-pat-grid>
+      ${visible.map(({p, i}) => {
+        const localPat = S.patterns[i];
+        const hasNotes = localPat?.steps?.some(s=>s.notes?.length>0);
+        const isActive = S.patIdx === i;
+        return html`<div class=${'synth-pat-card'+(isActive?' active':'')} onclick=${()=>loadAndEditSynthPattern(i)}>
+          <canvas class=pat-mini width=80 height=20 ref=${el=>{if(el&&hasNotes)drawPatMini(el,localPat);}}></canvas>
+          <div class=synth-pat-name>${p.name || `Pattern ${i+1}`}</div>
+          <div class=synth-pat-meta>${hasNotes?(localPat.steps.filter(s=>s.notes?.length>0).length+' notes • '+localPat.len+' steps'):'not loaded'}</div>
+        </div>`;
+      })}
+    </div>
   </div>`;
 }
 
-function loadSynthPattern(i) {
+function loadAndEditSynthPattern(i) {
   const p = S.sysexPatterns?.[i];
   if (!p) return;
   import('./micron-sysex.js').then(({parsePatternDump}) => {
     const parsed = parsePatternDump(new Uint8Array(p.raw));
+    while (S.patterns.length <= i) S.patterns.push({name:`Pat ${S.patterns.length+1}`,len:16,grid:0.0625,type:'seq',steps:Array.from({length:64},()=>({notes:[],len:0.0625,prob:100}))});
     if (parsed) {
-      while (S.patterns.length <= i) S.patterns.push({name:`Pat ${S.patterns.length+1}`,len:16,grid:0.0625,type:'seq',steps:Array.from({length:64},()=>({notes:[],len:0.0625,prob:100}))});
       S.patterns[i] = {name: p.name, len: parsed.len, grid: parsed.grid, type: parsed.type, steps: parsed.steps};
     } else {
-      while (S.patterns.length <= i) S.patterns.push({name:`Pat ${S.patterns.length+1}`,len:16,grid:0.0625,type:'seq',steps:Array.from({length:64},()=>({notes:[],len:0.0625,prob:100}))});
       S.patterns[i] = {...S.patterns[i], name: p.name};
     }
+    S.patIdx = i;
+    S.tab = 'seq';
     saveState(); render();
   });
 }
+
+export function loadSynthPattern(i) { loadAndEditSynthPattern(i); }
 
 function importPatternsJSON() {
   const input = document.createElement('input');
