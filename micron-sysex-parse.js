@@ -34,7 +34,8 @@ function parseMicronPattern(u, base, name, bank, slot) {
     if (step < 256) events.push({ pitch, vel, dur, noteLenTicks, step });
   }
   const maxStep = events.reduce((m, e) => Math.max(m, e.step), 0);
-  const len = Math.max(1, maxStep + 1);
+  const bars = Math.ceil((maxStep + 1) / STEPS_PER_BAR);
+  const len = bars > 1 ? bars * STEPS_PER_BAR : Math.max(1, maxStep + 1);
   const grid = 1 / STEPS_PER_BAR;
   const steps = Array.from({length: len}, () => ({notes: [], len: grid, prob: 100}));
   events.forEach(e => {
