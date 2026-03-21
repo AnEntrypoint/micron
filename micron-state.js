@@ -105,7 +105,7 @@ export const rhythm = () => S.rhythms[S.rhythmIdx] ?? S.rhythms[0];
 
 export function saveState() {
   try {
-    const d = {bpm:S.bpm,patterns:S.patterns,patIdx:S.patIdx,chain:S.chain,patch:S.patch,stepLen:S.stepLen,pitchOffset:S.pitchOffset,zoomX:S.zoomX,zoomY:S.zoomY,rollH:S.rollH,swingAmt:S.swingAmt,songChain:S.songChain,theme:S.theme,globalTranspose:S.globalTranspose,splitEnabled:S.splitEnabled,splitNote:S.splitNote,splitCh1:S.splitCh1,splitCh2:S.splitCh2,layerEnabled:S.layerEnabled,layerChannels:S.layerChannels,library:S.library,sysexBank:S.sysexBank,sysexBanks:S.sysexBanks,collapsedSections:S.collapsedSections,velocityCurve:S.velocityCurve,rhythms:S.rhythms,rhythmIdx:S.rhythmIdx,config:S.config};
+    const d = {bpm:S.bpm,patterns:S.patterns,patIdx:S.patIdx,chain:S.chain,patch:S.patch,stepLen:S.stepLen,pitchOffset:S.pitchOffset,zoomX:S.zoomX,zoomY:S.zoomY,rollH:S.rollH,swingAmt:S.swingAmt,songChain:S.songChain,theme:S.theme,globalTranspose:S.globalTranspose,splitEnabled:S.splitEnabled,splitNote:S.splitNote,splitCh1:S.splitCh1,splitCh2:S.splitCh2,layerEnabled:S.layerEnabled,layerChannels:S.layerChannels,library:S.library,sysexBank:S.sysexBank,sysexBanks:S.sysexBanks,collapsedSections:S.collapsedSections,velocityCurve:S.velocityCurve,rhythms:S.rhythms,rhythmIdx:S.rhythmIdx,config:S.config,libraryMode:S.libraryMode,libraryFilter:S.libraryFilter,libraryCat:S.libraryCat,sysexSelectedBank:S.sysexSelectedBank,standaloneSlots:S.standaloneSlots,abPatch:S.abPatch};
     localStorage.setItem('micron_state', JSON.stringify(d));
     S.unsaved = false;
   } catch(_) {}
@@ -145,6 +145,12 @@ export function loadState() {
     if (d.rhythms) S.rhythms = d.rhythms.map(r=>({...defaultRhythm(),...r,drums:(r.drums||[]).map(dr=>({...dr,steps:(dr.steps||[]).map(st=>({active:false,vel:100,...st}))}))}));
     if (d.rhythmIdx!=null) S.rhythmIdx = d.rhythmIdx;
     if (d.config) S.config = {...defaultConfig(),...d.config};
+    if (d.libraryMode) S.libraryMode = d.libraryMode;
+    if (d.libraryFilter!=null) S.libraryFilter = d.libraryFilter;
+    if (d.libraryCat!=null) S.libraryCat = d.libraryCat;
+    if (d.sysexSelectedBank!=null) S.sysexSelectedBank = d.sysexSelectedBank;
+    if (d.standaloneSlots) S.standaloneSlots = d.standaloneSlots;
+    if (d.abPatch) S.abPatch = d.abPatch;
   } catch(_) {}
 }
 

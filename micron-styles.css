@@ -1,5 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap');
-:root{--bg:#08090d;--panel:#0e1018;--panel2:#13151e;--border:#1c1f2e;--cyan:#00e5ff;--cyan2:#00b0cc;--orange:#ff6b00;--green:#00e676;--red:#ff1744;--yellow:#ffd600;--purple:#d500f9;--text:#c8ccd8;--text2:#7a7f96;--text3:#3a3f54;--accent:var(--cyan);--glow:0 0 8px var(--cyan);--safe-b:env(safe-area-inset-bottom,0px);--safe-t:env(safe-area-inset-top,0px)}
+:root{--bg:#08090d;--panel:#0e1018;--panel2:#13151e;--border:#1c1f2e;--cyan:#00e5ff;--cyan2:#00b0cc;--orange:#ff6b00;--green:#00e676;--red:#ff1744;--yellow:#ffd600;--purple:#d500f9;--text:#c8ccd8;--text2:#7a7f96;--text3:#3a3f54;--accent:var(--cyan);--glow:0 0 8px var(--cyan);--safe-b:env(safe-area-inset-bottom,0px);--safe-t:env(safe-area-inset-top,0px);--cell:#0d0f18;--accent2:#2a3a4a}
 body.light{--bg:#eef0f5;--panel:#fff;--panel2:#f5f7fa;--border:#d0d4e0;--text:#1a1d2a;--text2:#555870;--text3:#aab0c0}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px}
@@ -41,6 +41,7 @@ input[type=checkbox]:checked::after{content:'';position:absolute;top:2px;left:5p
 .step{width:42px;height:42px;border:1px solid var(--border);border-radius:4px;background:var(--panel);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:9px;cursor:pointer;user-select:none;overflow:hidden;transition:background .08s,border-color .08s;position:relative;touch-action:manipulation}
 .step:hover{border-color:var(--text3)}.step.has-notes{background:#001624;border-color:#005578}.step.cursor{outline:2px solid var(--cyan);outline-offset:-1px}.step.playing{background:#002030;border-color:var(--cyan);box-shadow:0 0 6px var(--cyan)}
 .step .vel-dot{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%}
+.step .step-prob-label{position:absolute;top:1px;right:2px;font-size:7px;color:var(--cyan);opacity:0.8;line-height:1}
 .section{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:8px}
 .section h4,.section .sh{font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;color:var(--cyan);margin-bottom:6px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;display:flex;justify-content:space-between;user-select:none}
 .section.orange .sh{color:var(--orange)}.sa{font-size:8px;color:var(--text3)}

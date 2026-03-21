@@ -2,7 +2,7 @@ import { createElement, applyDiff } from 'https://esm.sh/webjsx@0.0.73';
 import htm from 'https://esm.sh/htm@3.1.1';
 const html = htm.bind(createElement);
 import { S, loadState, saveState, pat } from './micron-state.js';
-import { M, initMIDI, allNotesOff, logMidi, setClockSend } from './micron-midi.js';
+import { M, initMIDI, allNotesOff, logMidi, setClockSend, previewNote } from './micron-midi.js';
 import { handleSysEx as sysexHandler, renderSysExTab, setRender as sysexSetRender } from './micron-views-sysex.js';
 import { renderPatchTab } from './micron-views-patch.js';
 import { renderPatternsTab, setRender as patSetRender, loadSynthPattern } from './micron-views-patterns.js';
@@ -75,10 +75,12 @@ function renderStepGrid() {
     <div class=step-grid>
       ${p.steps.slice(0,p.len).map((s,i)=>html`<div
         class=${'step'+(s.notes.length?' has-notes':'')+(i===S.cursor?' cursor':'')+(S.playing&&i===S.playStep%p.len?' playing':'')}
+        style=${(s.prob??100)<100?'opacity:'+(0.4+0.6*(s.prob??100)/100):''}
         onclick=${()=>{S.cursor=i;_notePickStep=(_notePickStep===i?null:i);schedRender();}}
         oncontextmenu=${e=>{e.preventDefault();s.notes=[];S.unsaved=true;schedRender();}}>
         <span>${s.notes.length?NOTE_NAMES[s.notes[0].pitch%12]+Math.floor(s.notes[0].pitch/12-1):'·'}</span>
         ${s.notes.length?html`<div class=vel-dot style=${'background:'+velColor(s.notes[0].vel)}></div>`:null}
+        ${(s.prob??100)<100?html`<span class=step-prob-label>%</span>`:null}
       </div>`)}
     </div>
     ${_notePickStep !== null && _notePickStep < p.len ? renderNotePicker(_notePickStep, p.steps[_notePickStep]) : null}
@@ -105,18 +107,30 @@ function renderNotePicker(si, s) {
     <div class=np-kb>
       ${WHITES.map((semi,wi)=>html`<div
         class=${'np-wk'+(semitone===semi?' active':'')}
-        onclick=${()=>setStepNote(si, octave*12+12+semi, note.vel, note.len)}
+        onclick=${()=>{const p=octave*12+12+semi;setStepNote(si,p,note.vel,note.len);previewNote(p,100);}}
       >${NOTE_NAMES[semi]}</div>`)}
       ${BLACKS.map((semi,bi)=>semi>=0?html`<div
         class=${'np-bk'+(semitone===semi?' active':'')}
         style=${'left:'+(bi*14.28+10)+'%'}
-        onclick=${e=>{e.stopPropagation();setStepNote(si, octave*12+12+semi, note.vel, note.len);}}
+        onclick=${e=>{e.stopPropagation();const p=octave*12+12+semi;setStepNote(si,p,note.vel,note.len);previewNote(p,100);}}
       ></div>`:null)}
     </div>
     <div class=np-row>
       <label>Velocity ${note.vel}</label>
       <input type=range min=1 max=127 value=${note.vel}
         oninput=${e=>{setStepNote(si,pitch,+e.target.value,note.len);}} class=rs />
+    </div>
+    <div class=np-row>
+      <label>Length</label>
+      ${[[1/32,'1/32'],[1/16,'1/16'],[1/8,'1/8'],[1/4,'1/4'],[1/2,'1/2'],[1,'1']].map(([val,label])=>html`<button
+        class=${'tbtn'+(note.len===val?' active':'')}
+        onclick=${()=>setStepNote(si,pitch,note.vel,val)}
+      >${label}</button>`)}
+    </div>
+    <div class=np-row>
+      <label>Prob ${s.prob??100}%</label>
+      <input type=range min=0 max=100 value=${s.prob??100}
+        oninput=${e=>{s.prob=+e.target.value;saveState();schedRender();}} class=rs />
     </div>
     ${s.notes.length ? html`<div class=np-row>
       <button class="tbtn warn" onclick=${()=>{s.notes=[];S.unsaved=true;_notePickStep=null;schedRender();}}>Remove note</button>
@@ -156,8 +170,15 @@ function navSynthPat(dir) {
 }
 
 function togglePlay() {
-  if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-  if (audioCtx.state==='suspended') audioCtx.resume();
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    if (audioCtx.state==='suspended') audioCtx.resume();
+  } catch(err) {
+    S.playing = false;
+    S.audioError = err && err.message ? err.message : String(err);
+    schedRender();
+    return;
+  }
   S.playing = !S.playing;
   if (S.playing) { S.playTime=audioCtx.currentTime; if(M.sendClock){import('./micron-midi.js').then(m=>m.startClock());} schedulePlayback(audioCtx); }
   else { cancelAnimationFrame(S.schedTimer); allNotesOff(); if(M.sendClock){import('./micron-midi.js').then(m=>m.stopClock());} }

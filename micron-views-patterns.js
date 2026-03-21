@@ -192,6 +192,7 @@ function loadAndEditSynthPattern(i) {
       }
     } else {
       S.patterns[i] = {...S.patterns[i], name: p.name};
+      S.patterns[i].steps.forEach(s => { s.notes = []; });
     }
     S.patIdx = i;
     S.tab = 'seq';

@@ -76,8 +76,27 @@ export function sendPitchBend(val14bit) {
 }
 
 export function applyVelCurve(v) {
-  if (M.velocityCurve === 'soft') return Math.round(Math.pow(v/127, 1.5)*127);
-  if (M.velocityCurve === 'hard') return Math.round(Math.pow(v/127, 0.6)*127);
+  if (v <= 0) return 0;
+  if (v >= 127) return 127;
+  const n = v / 127;
+  const curve = M.velocityCurve;
+  // Legacy names
+  if (curve === 'soft') return Math.round(Math.pow(n, 1.5) * 127);
+  if (curve === 'hard') return Math.round(Math.pow(n, 0.6) * 127);
+  // linear-low: scale down (output peaks around 80% at full input)
+  if (curve === 'linear-low')  return Math.round(n * 0.8 * 127);
+  // linear-med: identity
+  if (curve === 'linear-med')  return v;
+  // linear-high: scale up (boost lower velocities)
+  if (curve === 'linear-high') return Math.round(Math.min(1, n * 1.25) * 127);
+  // exp curves: output = n^exponent, >1 exponent = softer (harder to reach high vels)
+  if (curve === 'exp-low')  return Math.round(Math.pow(n, 2.0) * 127);
+  if (curve === 'exp-med')  return Math.round(Math.pow(n, 1.5) * 127);
+  if (curve === 'exp-high') return Math.round(Math.pow(n, 0.75) * 127);
+  // log curves: output = log(1 + n*(e-1)) normalised, positive = earlier peak
+  if (curve === 'log-low')  { const k=2; return Math.round(Math.log(1+n*k)/Math.log(1+k)*127); }
+  if (curve === 'log-med')  { const k=9; return Math.round(Math.log(1+n*k)/Math.log(1+k)*127); }
+  if (curve === 'log-high') { const k=49; return Math.round(Math.log(1+n*k)/Math.log(1+k)*127); }
   return v;
 }
 

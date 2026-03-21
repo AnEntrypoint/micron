@@ -10,6 +10,7 @@ let render = ()=>{};
 export function setRender(fn) { render=fn; }
 let _saveName = null;
 let _importToast = null;
+let _morphTimer = null;
 
 if (!S.libraryMode) S.libraryMode = 'local';
 
@@ -128,7 +129,8 @@ function renderABSection() {
         S.morphT=e.target.value/100;
         const morphed=morphPatches(S.abPatch[0].patch,S.abPatch[1].patch,S.morphT);
         S.patch={...morphed};
-        sendAllParams(S.patch);
+        clearTimeout(_morphTimer);
+        _morphTimer=setTimeout(()=>{ sendAllParams(S.patch); }, 30);
         render();
       }} class=rs />
       <span class=pv>${Math.round(S.morphT*100)}%</span>
