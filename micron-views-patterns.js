@@ -185,6 +185,11 @@ function loadAndEditSynthPattern(i) {
     while (S.patterns.length <= i) S.patterns.push({name:`Pat ${S.patterns.length+1}`,len:16,grid:0.0625,type:'seq',steps:Array.from({length:64},()=>({notes:[],len:0.0625,prob:100}))});
     if (parsed) {
       S.patterns[i] = {name: p.name, len: parsed.len, grid: parsed.grid, type: parsed.type, steps: parsed.steps};
+      const allPitches = parsed.steps.flatMap(s=>s.notes||[]).map(n=>n.pitch).filter(p=>p>0);
+      if (allPitches.length) {
+        const minP = Math.min(...allPitches);
+        S.pitchOffset = Math.max(0, minP - 4);
+      }
     } else {
       S.patterns[i] = {...S.patterns[i], name: p.name};
     }

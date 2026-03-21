@@ -67,17 +67,70 @@ function renderSeqTab() {
   </div>`;
 }
 
+let _notePickStep = null;
+
 function renderStepGrid() {
   const p = pat();
-  return html`<div class=step-grid>
-    ${p.steps.slice(0,p.len).map((s,i)=>html`<div
-      class=${'step'+(s.notes.length?' has-notes':'')+(i===S.cursor?' cursor':'')+(S.playing&&i===S.playStep%p.len?' playing':'')}
-      onclick=${()=>{S.cursor=i;schedRender();}}
-      oncontextmenu=${e=>{e.preventDefault();const pi=s.notes.findIndex(n=>true);if(pi>=0)s.notes.splice(pi,1);schedRender();}}>
-      <span>${s.notes.length?NOTE_NAMES[s.notes[0].pitch%12]+Math.floor(s.notes[0].pitch/12-1):'·'}</span>
-      ${s.notes.length?html`<div class=vel-dot style=${'background:'+velColor(s.notes[0].vel)}></div>`:null}
-    </div>`)}
+  return html`<div>
+    <div class=step-grid>
+      ${p.steps.slice(0,p.len).map((s,i)=>html`<div
+        class=${'step'+(s.notes.length?' has-notes':'')+(i===S.cursor?' cursor':'')+(S.playing&&i===S.playStep%p.len?' playing':'')}
+        onclick=${()=>{S.cursor=i;_notePickStep=(_notePickStep===i?null:i);schedRender();}}
+        oncontextmenu=${e=>{e.preventDefault();s.notes=[];S.unsaved=true;schedRender();}}>
+        <span>${s.notes.length?NOTE_NAMES[s.notes[0].pitch%12]+Math.floor(s.notes[0].pitch/12-1):'·'}</span>
+        ${s.notes.length?html`<div class=vel-dot style=${'background:'+velColor(s.notes[0].vel)}></div>`:null}
+      </div>`)}
+    </div>
+    ${_notePickStep !== null && _notePickStep < p.len ? renderNotePicker(_notePickStep, p.steps[_notePickStep]) : null}
   </div>`;
+}
+
+function renderNotePicker(si, s) {
+  const note = s.notes[0] || {pitch: S.pitchOffset + 12 || 60, vel: 100, len: 0.0625};
+  const pitch = note.pitch;
+  const octave = Math.floor(pitch / 12) - 1;
+  const semitone = pitch % 12;
+  const WHITES = [0,2,4,5,7,9,11], BLACKS = [1,3,-1,6,8,10,-1];
+  return html`<div class=note-picker>
+    <div class=np-row>
+      <label>Step ${si+1}</label>
+      <button class=np-close onclick=${()=>{_notePickStep=null;schedRender();}}>✕</button>
+    </div>
+    <div class=np-row>
+      <label>Octave</label>
+      <button class=tbtn onclick=${()=>{setStepNote(si,pitch-12,note.vel,note.len);}}>−</button>
+      <span class=pv>${octave}</span>
+      <button class=tbtn onclick=${()=>{setStepNote(si,pitch+12,note.vel,note.len);}}>+</button>
+    </div>
+    <div class=np-kb>
+      ${WHITES.map((semi,wi)=>html`<div
+        class=${'np-wk'+(semitone===semi?' active':'')}
+        onclick=${()=>setStepNote(si, octave*12+12+semi, note.vel, note.len)}
+      >${NOTE_NAMES[semi]}</div>`)}
+      ${BLACKS.map((semi,bi)=>semi>=0?html`<div
+        class=${'np-bk'+(semitone===semi?' active':'')}
+        style=${'left:'+(bi*14.28+10)+'%'}
+        onclick=${e=>{e.stopPropagation();setStepNote(si, octave*12+12+semi, note.vel, note.len);}}
+      ></div>`:null)}
+    </div>
+    <div class=np-row>
+      <label>Velocity ${note.vel}</label>
+      <input type=range min=1 max=127 value=${note.vel}
+        oninput=${e=>{setStepNote(si,pitch,+e.target.value,note.len);}} class=rs />
+    </div>
+    ${s.notes.length ? html`<div class=np-row>
+      <button class="tbtn warn" onclick=${()=>{s.notes=[];S.unsaved=true;_notePickStep=null;schedRender();}}>Remove note</button>
+    </div>` : null}
+  </div>`;
+}
+
+function setStepNote(si, pitch, vel, len) {
+  const s = step(si);
+  pitch = Math.max(0, Math.min(127, pitch));
+  if (s.notes.length) { s.notes[0] = {pitch, vel, len}; }
+  else { s.notes.push({pitch, vel, len}); }
+  S.unsaved = true;
+  schedRender();
 }
 
 function setupCanvas(el) {

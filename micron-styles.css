@@ -248,3 +248,24 @@ input[type=checkbox]:checked::after{content:'';position:absolute;top:2px;left:5p
 .stat-badge{display:flex;flex-direction:column;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 14px;min-width:80px}
 .stat-num{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:700;color:var(--cyan)}
 .stat-label{font-size:9px;color:var(--text2);margin-top:2px}
+.synth-pat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:5px;max-height:400px;overflow-y:auto;margin-top:4px}
+.synth-pat-card{border:1px solid var(--border);border-radius:5px;background:var(--panel2);padding:5px;cursor:pointer;transition:all .1s}
+.synth-pat-card:hover{border-color:var(--text3)}
+.synth-pat-card.active{border-color:var(--cyan);background:#001824;box-shadow:0 0 6px #00e5ff22}
+.synth-pat-name{font-size:9px;color:var(--text);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.synth-pat-meta{font-size:8px;color:var(--text3);margin-top:1px}
+.seq-pat-bar{display:flex;align-items:center;gap:6px;padding:4px 0;margin-bottom:4px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.seq-pat-label{font-size:10px;color:var(--text2);white-space:nowrap}
+.seq-pat-name{font-size:11px;color:var(--cyan);font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.note-picker{background:var(--panel2);border:1px solid var(--cyan);border-radius:6px;padding:8px;margin-top:6px;display:flex;flex-direction:column;gap:6px}
+.np-row{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text2)}
+.np-row label{min-width:60px}
+.np-close{margin-left:auto;background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0 4px}
+.np-close:hover{color:var(--text)}
+.np-kb{position:relative;height:54px;display:flex}
+.np-wk{flex:1;height:54px;border:1px solid var(--border);background:var(--panel);border-radius:0 0 3px 3px;cursor:pointer;display:flex;align-items:flex-end;justify-content:center;padding-bottom:2px;font-size:8px;color:var(--text3);user-select:none;transition:background .08s}
+.np-wk:hover{background:var(--panel2)}
+.np-wk.active{background:#001824;border-color:var(--cyan);color:var(--cyan)}
+.np-bk{position:absolute;top:0;width:10%;height:33px;background:#0a0b10;border:1px solid var(--border);border-radius:0 0 3px 3px;cursor:pointer;z-index:2;transition:background .08s}
+.np-bk:hover{background:#1a1d2e}
+.np-bk.active{background:#001824;border-color:var(--cyan)}
