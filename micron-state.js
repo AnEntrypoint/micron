@@ -89,6 +89,7 @@ export const S = {
   sendProgress: null,
   bgSyncProgress: null,
   sysexRhythms: Array(128).fill(null),
+  sysexSetups: Array(256).fill(null),
   sysexLog: '',
   midiMonitor: [],
   lockedParams: {},
@@ -105,7 +106,7 @@ export const rhythm = () => S.rhythms[S.rhythmIdx] ?? S.rhythms[0];
 
 export function saveState() {
   try {
-    const d = {bpm:S.bpm,patterns:S.patterns,patIdx:S.patIdx,chain:S.chain,patch:S.patch,stepLen:S.stepLen,pitchOffset:S.pitchOffset,zoomX:S.zoomX,zoomY:S.zoomY,rollH:S.rollH,swingAmt:S.swingAmt,songChain:S.songChain,theme:S.theme,globalTranspose:S.globalTranspose,splitEnabled:S.splitEnabled,splitNote:S.splitNote,splitCh1:S.splitCh1,splitCh2:S.splitCh2,layerEnabled:S.layerEnabled,layerChannels:S.layerChannels,library:S.library,sysexBank:S.sysexBank,sysexBanks:S.sysexBanks,collapsedSections:S.collapsedSections,velocityCurve:S.velocityCurve,rhythms:S.rhythms,rhythmIdx:S.rhythmIdx,config:S.config,libraryMode:S.libraryMode,libraryFilter:S.libraryFilter,libraryCat:S.libraryCat,sysexSelectedBank:S.sysexSelectedBank,standaloneSlots:S.standaloneSlots,abPatch:S.abPatch};
+    const d = {bpm:S.bpm,patterns:S.patterns,patIdx:S.patIdx,chain:S.chain,patch:S.patch,stepLen:S.stepLen,pitchOffset:S.pitchOffset,zoomX:S.zoomX,zoomY:S.zoomY,rollH:S.rollH,swingAmt:S.swingAmt,songChain:S.songChain,theme:S.theme,globalTranspose:S.globalTranspose,splitEnabled:S.splitEnabled,splitNote:S.splitNote,splitCh1:S.splitCh1,splitCh2:S.splitCh2,layerEnabled:S.layerEnabled,layerChannels:S.layerChannels,library:S.library,sysexBank:S.sysexBank,sysexBanks:S.sysexBanks,collapsedSections:S.collapsedSections,velocityCurve:S.velocityCurve,rhythms:S.rhythms,rhythmIdx:S.rhythmIdx,config:S.config,libraryMode:S.libraryMode,libraryFilter:S.libraryFilter,libraryCat:S.libraryCat,sysexSelectedBank:S.sysexSelectedBank,standaloneSlots:S.standaloneSlots,abPatch:S.abPatch,sysexSetups:S.sysexSetups};
     localStorage.setItem('micron_state', JSON.stringify(d));
     S.unsaved = false;
   } catch(_) {}
@@ -140,6 +141,7 @@ export function loadState() {
     }
     if (d.sysexBank) S.sysexBank = d.sysexBank;
     if (d.sysexBanks) S.sysexBanks = d.sysexBanks.map(b => Array.isArray(b) ? b : Array(128).fill(null));
+    if (d.sysexSetups) S.sysexSetups = d.sysexSetups.map(s => s || null);
     if (d.collapsedSections) S.collapsedSections = d.collapsedSections;
     if (d.velocityCurve) S.velocityCurve = d.velocityCurve;
     if (d.rhythms) S.rhythms = d.rhythms.map(r=>({...defaultRhythm(),...r,drums:(r.drums||[]).map(dr=>({...dr,steps:(dr.steps||[]).map(st=>({active:false,vel:100,...st}))}))}));
