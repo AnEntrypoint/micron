@@ -1,21 +1,23 @@
 # micron
 
-A lightweight in-browser code editor and runtime environment built for Alessio.
-
-## Overview
-
-micron is a minimal, fast, browser-based editor that lets you write and run code directly in the browser — no installation, no build step, no server required.
+Browser-based controller and patch manager for the Alesis Micron synthesizer.
 
 ## Features
 
-- In-browser code editing with syntax highlighting
-- Instant execution: run code without leaving the browser
-- Minimal footprint — loads fast, stays out of the way
-- Designed for Alessio workflows
+- Patch editor with full parameter control (oscillators, filters, envelopes, LFOs, mod matrix, FX)
+- Sequencer with piano roll and step grid
+- Rhythm editor (drum machine)
+- SysEx backup: import/export patches, patterns, setups, rhythms via MIDI SysEx
+- Setups tab: 128-slot grid, parts list (program names per part), send/export/rename/request
+- Pattern manager with synth-side pattern browser
+- Library with A/B compare and morphing
+- MIDI monitor, split/layer, NRPN learn, config panel
+- Standalone mode for direct MIDI slot management
+- Dark/light theme, keyboard shortcuts, touch support
 
-## Usage
+## Setup
 
-Open the editor in your browser and start writing. Code runs in an isolated sandbox environment inside the page.
+Connect the Alesis Micron via USB MIDI (or hardware MIDI interface). Open `index.html` in a browser that supports Web MIDI API (Chrome/Edge recommended).
 
 ## Development
 
@@ -24,7 +26,7 @@ git clone https://github.com/AnEntrypoint/micron
 cd micron
 ```
 
-Open `index.html` in your browser to start the editor.
+Open `index.html` directly — no build step required.
 
 ## License
 
