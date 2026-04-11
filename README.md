@@ -8,7 +8,7 @@ Browser-based controller and patch manager for the Alesis Micron synthesizer.
 - Sequencer with piano roll and step grid
 - Rhythm editor (drum machine)
 - SysEx backup: import/export patches, patterns, setups, rhythms via MIDI SysEx
-- Setups tab: 128-slot grid, parts list (program names per part), send/export/rename/request
+- Setups tab: 128-slot grid, live editor with param block hex editor, send/capture workflow, parts list, rename/export
 - Pattern manager with synth-side pattern browser
 - Library with A/B compare and morphing
 - MIDI monitor, split/layer, NRPN learn, config panel
