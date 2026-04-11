@@ -180,5 +180,19 @@ export function parseSetupDump(data) {
   if (unpacked.length<14) return null;
   const base=contentBase(unpacked);
   const name=decodeStr(unpacked.slice(base,base+14))||'Setup';
-  return {name,isSetup:true};
+  const parts=[];
+  if (unpacked[0]===0x51&&unpacked[1]===0x30&&unpacked[2]===0x31) {
+    let off=140;
+    while (off+20<=unpacked.length) {
+      if (unpacked[off+1]===0x20&&unpacked[off]>=0x01&&unpacked[off]<=0x10) {
+        const type=unpacked[off],ref=unpacked[off+2];
+        const rawName=decodeStr(unpacked.slice(off+3,off+17));
+        const nl=rawName.length;
+        if (/^[A-Za-z0-9 .&!'#+\-_\/()@*]+$/.test(rawName)&&nl>=2&&!(nl>=3&&/^[A-Za-z]\d{1,2}$/.test(rawName))&&!(nl===2&&!/^[A-Z][A-Z0-9]$/.test(rawName)))
+          { parts.push({type,ref,name:rawName}); off+=20; continue; }
+      }
+      off++;
+    }
+  }
+  return {name,isSetup:true,parts};
 }

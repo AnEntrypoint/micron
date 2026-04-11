@@ -12,6 +12,7 @@ import { renderLibraryTab, setRender as libSetRender } from './micron-views-libr
 import { renderRhythmTab, setRender as rhythmSetRender } from './micron-views-rhythm.js';
 import { renderConfigTab, setRender as configSetRender } from './micron-views-config.js';
 import { renderStandaloneTab, setRender as standaloneSetRender } from './micron-views-standalone.js';
+import { renderSetupTab, setRender as setupSetRender } from './micron-views-setup.js';
 import { drawRoll, schedulePlayback, initRoll, setPlaybackCanvases } from './micron-sequencer.js';
 import { NOTE_NAMES, velColor, SCALES } from './micron-data.js';
 import { TABS, render as schedRender, setRenderFn } from './micron-ui-core.js';
@@ -288,7 +289,7 @@ function renderBottomNav() {
   </div>`;
 }
 
-const TAB_VIEWS = {seq:renderSeqTab,patch:renderPatchTab,patterns:renderPatternsTab,rhythm:renderRhythmTab,midi:renderMIDITab,sysex:renderSysExTab,config:renderConfigTab,standalone:renderStandaloneTab,library:renderLibraryTab};
+const TAB_VIEWS = {seq:renderSeqTab,patch:renderPatchTab,patterns:renderPatternsTab,rhythm:renderRhythmTab,midi:renderMIDITab,sysex:renderSysExTab,setups:renderSetupTab,config:renderConfigTab,standalone:renderStandaloneTab,library:renderLibraryTab};
 
 function renderShortcutsModal() {
   if (!S.shortcutsVisible) return null;
@@ -336,7 +337,7 @@ window._M = M;
 window._handleSysEx = sysexHandler;
 window._requestPatch = (bank, slot) => import('./micron-sysex.js').then(m => m.requestPatch(bank, slot));
 setRenderFn(doRender);
-[sysexSetRender,patSetRender,midiSetRender,libSetRender,rhythmSetRender,configSetRender,standaloneSetRender].forEach(fn=>fn(schedRender));
+[sysexSetRender,patSetRender,midiSetRender,libSetRender,rhythmSetRender,configSetRender,standaloneSetRender,setupSetRender].forEach(fn=>fn(schedRender));
 document.addEventListener('keydown', e => {
   if (e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA') return;
   if (e.key===' ') { e.preventDefault(); togglePlay(); }

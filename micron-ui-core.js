@@ -25,6 +25,7 @@ export const TABS = [
   {id:'rhythm', label:'Rhythm', icon:'♥'},
   {id:'midi', label:'MIDI', icon:'⟵'},
   {id:'sysex', label:'SysEx', icon:'⬡'},
+  {id:'setups', label:'Setups', icon:'⊕'},
   {id:'config', label:'Config', icon:'⚙'},
   {id:'standalone', label:'Standalone', icon:'▲'},
   {id:'library', label:'Library', icon:'⊙'},

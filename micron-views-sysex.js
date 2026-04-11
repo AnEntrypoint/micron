@@ -1,6 +1,6 @@
 import { html } from './micron-ui-core.js';
 import { S } from './micron-state.js';
-import { parsePatchDump, requestPatch, requestSetup, sendPatchDump, storePatchToBank, sendRawSysEx } from './micron-sysex.js';
+import { parsePatchDump, requestPatch, sendPatchDump, storePatchToBank, sendRawSysEx } from './micron-sysex.js';
 import { BANKS } from './micron-data.js';
 import { defaultPatch, sendAllParams } from './micron-patch.js';
 import { sendProgramChange } from './micron-midi.js';
@@ -43,7 +43,7 @@ export function renderSysExTab() {
       </div>
     </div>
     ${renderPatchBanks()}
-    ${renderSetups()}
+    ${renderRhythms()}
   </div>`;
 }
 
@@ -79,39 +79,20 @@ function renderPatchBanks() {
   </div>`;
 }
 
-function renderSetups() {
-  const setups=(S.sysexSetups||[]).filter(Boolean),rhythms=(S.sysexRhythms||[]).filter(Boolean);
-  if(!setups.length&&!rhythms.length)return null;
-  const sf=S.setupFilter||'';
-  return html`<div>
-    <div class=section>
-      <h4>Setups (${setups.length})</h4>
-      <div class=pr>
-        <input placeholder="Filter setups..." value=${sf} oninput=${e=>{S.setupFilter=e.target.value;render();}} class=search-in />
-        <input type=number min=0 max=127 value=${S.setupReqSlot||0} oninput=${e=>{S.setupReqSlot=Math.max(0,Math.min(127,+e.target.value));}} class=num-in style="width:44px" />
-        <button class=tbtn onclick=${()=>{requestSetup(S.setupReqSlot||0);S.sysexLog=`Requested setup #${S.setupReqSlot||0}`;render();}}>Req Slot</button>
-        <button class=tbtn onclick=${()=>doRequestAllSetups()}>Req All</button>
-      </div>
-      <div class=bank-grid>
-        ${(S.sysexSetups||[]).slice(0,128).map((s,i)=>(!sf||s?.name?.toLowerCase().includes(sf.toLowerCase()))?html`<div class=${'bank-cell'+(s?' loaded':'')} title=${s?s.name:''}>
-          <span class=bc-num>${i}</span><span class=bc-name>${s?s.name:'—'}</span>
-          ${s?.raw?html`<span class=bc-actions><button class=bc-recall title="Send to synth slot ${i}" onclick=${ev=>{ev.stopPropagation();doSendSetup(s,i);}}>▶</button></span>`:null}
-        </div>`:null)}
-      </div>
+
+function renderRhythms() {
+  const rhythms = (S.sysexRhythms||[]).filter(Boolean);
+  if (!rhythms.length) return null;
+  return html`<div class=section>
+    <h4>Rhythms (${rhythms.length})</h4>
+    <div class=standalone-list>
+      ${(S.sysexRhythms||[]).map((r,i)=>r?html`<div class=standalone-slot>
+        <span class=slot-name>${r.name}</span><span class=slot-info>Slot ${i}</span>
+        ${r.raw?html`<button class=tbtn onclick=${()=>{sendRawSysEx(r.raw);S.sysexLog='Sent rhythm "'+r.name+'"';render();}}>Send</button>`:null}
+      </div>`:null)}
     </div>
-    ${rhythms.length?html`<div class=section>
-      <h4>Rhythms (${rhythms.length})</h4>
-      <div class=standalone-list>
-        ${(S.sysexRhythms||[]).map((r,i)=>r?html`<div class=standalone-slot>
-          <span class=slot-name>${r.name}</span><span class=slot-info>Slot ${i}</span>
-          ${r.raw?html`<button class=tbtn onclick=${()=>{sendRawSysEx(r.raw);S.sysexLog='Sent rhythm "'+r.name+'"';render();}}>Send</button>`:null}
-        </div>`:null)}
-      </div>
-    </div>`:null}
   </div>`;
 }
-function doSendSetup(s,slot){const r=[...s.raw];r[8]=slot&0x7F;sendRawSysEx(r);S.sysexLog=`Sent setup "${s.name}" to slot ${slot}`;render();}
-async function doRequestAllSetups(){for(let s=0;s<128;s++){requestSetup(s);await new Promise(r=>setTimeout(r,150));}S.sysexLog='Requested 128 setups';render();}
 
 function doStore(p, fromSlot) {
   if (!p.raw) return;
