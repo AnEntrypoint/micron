@@ -152,8 +152,7 @@ export function parsePatternDump(data) {
 export function parseRhythmDump(data) {
   if (!isAlesisDump(data, CONTENT_RHYTHM)) return null;
   const slot=data[8]&0x7F, bank=data[6]&0x0F;
-  const unpacked=unpackDump(data);
-  const base=contentBase(unpacked);
+  const unpacked=unpackDump(data); const base=contentBase(unpacked);
   if (unpacked.length < base+19) return null;
   const name=decodeStr(unpacked.slice(base,base+14))||`Rhythm ${slot+1}`;
   if (base > 0) return {name,bank,slot,rawFormat:true,isRhythm:true};
@@ -176,23 +175,26 @@ export function parseRhythmDump(data) {
 }
 
 export function parseSetupDump(data) {
-  const unpacked=unpackDump(data);
-  if (unpacked.length<14) return null;
-  const base=contentBase(unpacked);
-  const name=decodeStr(unpacked.slice(base,base+14))||'Setup';
+  const u=unpackDump(data); if(!u||u.length<72) return null;
+  const name=decodeStr(u.slice(56,70))||'Setup';
+  const nb=Array.from(name).map(c=>c.charCodeAt(0));
+  let refOff=-1;
+  for(let i=u.length-nb.length-1;i>=88;i--)
+    if(u[i+nb.length]===0&&nb.every((b,j)=>u[i+j]===b)){refOff=i;break;}
+  const endOff=refOff>=8?refOff-8:-1;
+  const varBytes=endOff>72?u.slice(72,endOff):new Uint8Array(0);
+  const blocks=[];
+  for(let i=0;i+8<=varBytes.length;i+=8)blocks.push(Array.from(varBytes.slice(i,i+8)));
   const parts=[];
-  if (unpacked[0]===0x51&&unpacked[1]===0x30&&unpacked[2]===0x31) {
-    let off=140;
-    while (off+20<=unpacked.length) {
-      if (unpacked[off+1]===0x20&&unpacked[off]>=0x01&&unpacked[off]<=0x10) {
-        const type=unpacked[off],ref=unpacked[off+2];
-        const rawName=decodeStr(unpacked.slice(off+3,off+17));
-        const nl=rawName.length;
-        if (/^[A-Za-z0-9 .&!'#+\-_\/()@*]+$/.test(rawName)&&nl>=2&&!(nl>=3&&/^[A-Za-z]\d{1,2}$/.test(rawName))&&!(nl===2&&!/^[A-Z][A-Z0-9]$/.test(rawName)))
-          { parts.push({type,ref,name:rawName}); off+=20; continue; }
-      }
-      off++;
-    }
+  if(refOff>0){
+    let off=refOff;
+    while(off<u.length&&u[off]!==0)off++; off++;
+    while(off<u.length&&u[off]===0)off++;
+    while(off+3<u.length){const t=u[off];if(t<1||t>16)break;
+      const r=(u[off+1]<<8)|u[off+2];let ne=off+3;
+      while(ne<u.length&&u[ne]!==0)ne++;
+      const pn=decodeStr(u.slice(off+3,ne));if(!pn||ne-off-3>32)break;
+      parts.push({type:t,ref:r,name:pn});off=ne+1;while(off<u.length&&u[off]===0)off++;}
   }
-  return {name,isSetup:true,parts};
+  return {name,isSetup:true,parts,blocks,rawUnpacked:u};
 }

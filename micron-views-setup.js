@@ -1,6 +1,6 @@
 import { html } from './micron-ui-core.js';
 import { S } from './micron-state.js';
-import { requestSetup, sendRawSysEx, parseSetupDump } from './micron-sysex.js';
+import { requestSetup, sendRawSysEx, parseSetupDump, pack7of8 } from './micron-sysex.js';
 
 let render = () => {};
 export function setRender(fn) { render = fn; }
@@ -24,6 +24,52 @@ function downloadBytes(bytes, filename) {
   const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], {type:'application/octet-stream'}));
   Object.assign(document.createElement('a'), {href:url, download:filename}).click();
   URL.revokeObjectURL(url);
+}
+
+function repackSysEx(s, u) {
+  const padded = Array.from(u); while (padded.length % 7 !== 0) padded.push(0);
+  const packed = pack7of8(padded);
+  return [...Array.from(s.raw).slice(0, 9), ...packed, 0xF7];
+}
+
+function setBlockByte(slot, bi, bj, val) {
+  const s = S.sysexSetups[slot]; if (!s?.raw) return;
+  const parsed = parseSetupDump(new Uint8Array(s.raw));
+  if (!parsed?.rawUnpacked) return;
+  const u = Array.from(parsed.rawUnpacked);
+  const endOff = parsed.blocks.length > 0 ? 72 + parsed.blocks.length * 8 : -1;
+  if (endOff < 0) return;
+  u[72 + bi * 8 + bj] = val & 0xFF;
+  const raw = repackSysEx(s, u);
+  S.sysexSetups[slot] = {...s, raw};
+  sendRawSysEx(raw); render();
+}
+
+function renderLiveEditor(slot) {
+  const s = S.sysexSetups[slot]; if (!s) return null;
+  const parsed = s.raw ? parseSetupDump(new Uint8Array(s.raw)) : null;
+  const blocks = parsed?.blocks || [];
+  const parts = parsed?.parts || [];
+  return html`<div class=section>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+      <span style="font-family:Orbitron,sans-serif;font-size:10px;color:var(--cyan)">LIVE EDIT</span>
+      <button class=tbtn onclick=${()=>{sendRawSysEx(s.raw);S.sysexLog='Sent to edit buffer';render();}}>▶ Send</button>
+      <button class=tbtn onclick=${()=>{requestSetup(0);S.sysexLog='Capturing edit buffer…';render();}}>⟳ Capture</button>
+      ${s.raw?html`<button class=tbtn onclick=${()=>downloadBytes(s.raw,`setup-${s.name.replace(/[^a-z0-9]/gi,'-')}.syx`)}>⬇ Export</button>`:null}
+    </div>
+    ${parts.length?html`<div style="font-size:10px;color:var(--text2);margin-bottom:6px">${parts.map(p=>p.name).join(' · ')}</div>`:null}
+    ${blocks.length?html`<div>
+      <div style="font-size:9px;color:var(--text3);margin-bottom:4px">PARAM BLOCKS (${blocks.length})</div>
+      <div style="font-family:monospace;font-size:10px">
+        ${blocks.map((blk,bi)=>html`<div style="display:flex;gap:3px;margin-bottom:2px;align-items:center">
+          <span style="color:var(--text3);min-width:18px;font-size:9px">${bi}</span>
+          ${blk.map((byte,bj)=>html`<input type=number min=0 max=255 value=${byte}
+            style="width:36px;font-size:9px;text-align:center;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:1px"
+            onchange=${e=>setBlockByte(slot,bi,bj,+e.target.value)} />`)}
+        </div>`)}
+      </div>
+    </div>`:html`<div style="font-size:10px;color:var(--text3)">No param blocks decoded</div>`}
+  </div>`;
 }
 
 function doSend(s, slot) {
@@ -119,6 +165,7 @@ export function renderSetupTab() {
       </div>
     </div>
     ${selected !== null ? renderDetail(selected) : null}
+    ${selected !== null ? renderLiveEditor(selected) : null}
     <div class=syx-log style="margin-top:4px">${S.sysexLog||'No SysEx activity.'}</div>
   </div>`;
 }
