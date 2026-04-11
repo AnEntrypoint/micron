@@ -144,31 +144,10 @@ function removeDrum(di) {
   saveState(); render();
 }
 
-function newRhythm() {
-  S.rhythms.push(defaultRhythm());
-  S.rhythmIdx = S.rhythms.length - 1;
-  saveState(); render();
-}
-
-function copyRhythm() {
-  const copy = JSON.parse(JSON.stringify(rhythm()));
-  copy.name = copy.name + ' (copy)';
-  S.rhythms.push(copy);
-  S.rhythmIdx = S.rhythms.length - 1;
-  saveState(); render();
-}
-
-function clearRhythm() {
-  rhythm().drums.forEach(d => d.steps.forEach(s => { s.active=false; }));
-  saveState(); render();
-}
-
-function deleteRhythm() {
-  if (S.rhythms.length <= 1) return;
-  S.rhythms.splice(S.rhythmIdx, 1);
-  S.rhythmIdx = Math.min(S.rhythmIdx, S.rhythms.length - 1);
-  saveState(); render();
-}
+function newRhythm() { S.rhythms.push(defaultRhythm()); S.rhythmIdx=S.rhythms.length-1; saveState(); render(); }
+function copyRhythm() { const c=JSON.parse(JSON.stringify(rhythm())); c.name+=' (copy)'; S.rhythms.push(c); S.rhythmIdx=S.rhythms.length-1; saveState(); render(); }
+function clearRhythm() { rhythm().drums.forEach(d=>d.steps.forEach(s=>{s.active=false;})); saveState(); render(); }
+function deleteRhythm() { if(S.rhythms.length<=1)return; S.rhythms.splice(S.rhythmIdx,1); S.rhythmIdx=Math.min(S.rhythmIdx,S.rhythms.length-1); saveState(); render(); }
 
 function renderFromSynth() {
   const entries = (S.sysexRhythms || []).map((s, i) => s ? {s, i} : null).filter(Boolean);

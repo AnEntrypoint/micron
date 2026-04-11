@@ -75,24 +75,12 @@ function drawPatMini(canvas, p) {
   });
 }
 
-function changePatLen(l) {
-  pat().len = l;
-  while (pat().steps.length < l) pat().steps.push({notes:[],len:0.0625,prob:100});
-  saveState();
-}
+function changePatLen(l) { pat().len=l; while(pat().steps.length<l)pat().steps.push({notes:[],len:0.0625,prob:100}); saveState(); }
 
 let _clipPat = null;
-function copyPat(i) { _clipPat = JSON.parse(JSON.stringify(S.patterns[i])); }
-function pastePat(i) {
-  if (!_clipPat) return;
-  S.patterns[i] = JSON.parse(JSON.stringify(_clipPat));
-  S.patterns[i].name = S.patterns[i].name + ' (copy)';
-  saveState(); render();
-}
-function clearPat(i) {
-  S.patterns[i].steps.forEach(s=>{s.notes=[];});
-  saveState(); render();
-}
+function copyPat(i) { _clipPat=JSON.parse(JSON.stringify(S.patterns[i])); }
+function pastePat(i) { if(!_clipPat)return; S.patterns[i]=JSON.parse(JSON.stringify(_clipPat)); S.patterns[i].name+=' (copy)'; saveState(); render(); }
+function clearPat(i) { S.patterns[i].steps.forEach(s=>{s.notes=[];}); saveState(); render(); }
 
 function sendCurrentPattern() {
   const slot = (S.standaloneSlots && S.standaloneSlots['p'+S.patIdx]) ?? S.patSysexSlot ?? S.patIdx;
@@ -141,27 +129,16 @@ function renderSongChain() {
   </div>`;
 }
 
-function addToChain() {
-  S.songChain.push(S.patIdx);
-  saveState();
-  render();
-}
+function addToChain() { S.songChain.push(S.patIdx); saveState(); render(); }
 
 function exportPatternsJSON() {
-  const json = JSON.stringify({patterns:S.patterns, songChain:S.songChain}, null, 2);
-  const blob = new Blob([json],{type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href=url; a.download='micron-patterns.json'; a.click();
-  URL.revokeObjectURL(url);
+  const url = URL.createObjectURL(new Blob([JSON.stringify({patterns:S.patterns,songChain:S.songChain},null,2)],{type:'application/json'}));
+  const a = document.createElement('a'); a.href=url; a.download='micron-patterns.json'; a.click(); URL.revokeObjectURL(url);
 }
 
 function renderFromSynth() {
   const entries = (S.sysexPatterns || []).map((p, i) => p ? {p, i} : null).filter(Boolean);
-  if (entries.length === 0) return html`<div class=section>
-    <h4>From Synth</h4>
-    <div class=hint>No patterns received from synth yet. On Micron: [patterns] → select → push knob → "Send MIDI sysex?"</div>
-  </div>`;
-  const loaded = entries.filter(({i}) => S.patterns[i] && S.patterns[i].steps?.some(s=>s.notes?.length>0));
+  if (entries.length === 0) return html`<div class=section><h4>From Synth</h4><div class=hint>No patterns received from synth yet. On Micron: [patterns] → select → push knob → "Send MIDI sysex?"</div></div>`;
   const filter = S.synthPatFilter || '';
   const visible = entries.filter(({p}) => !filter || (p.name||'').toLowerCase().includes(filter.toLowerCase()));
   return html`<div class=section>
@@ -171,8 +148,7 @@ function renderFromSynth() {
       ${visible.map(({p, i}) => {
         const localPat = S.patterns[i];
         const hasNotes = localPat?.steps?.some(s=>s.notes?.length>0);
-        const isActive = S.patIdx === i;
-        return html`<div class=${'synth-pat-card'+(isActive?' active':'')} onclick=${()=>loadAndEditSynthPattern(i)}>
+        return html`<div class=${'synth-pat-card'+(S.patIdx===i?' active':'')} onclick=${()=>loadAndEditSynthPattern(i)}>
           <canvas class=pat-mini width=80 height=20 ref=${el=>{if(el&&hasNotes)drawPatMini(el,localPat);}}></canvas>
           <div class=synth-pat-name>${p.name || `Pattern ${i+1}`}</div>
           <div class=synth-pat-meta>${hasNotes?(localPat.steps.filter(s=>s.notes?.length>0).length+' notes • '+localPat.len+' steps'):'not loaded'}</div>
@@ -213,14 +189,7 @@ function importPatternsJSON() {
   input.onchange = e => {
     const file=e.target.files[0]; if(!file) return;
     const reader=new FileReader();
-    reader.onload = ev => {
-      try {
-        const d=JSON.parse(ev.target.result);
-        if(d.patterns) S.patterns=d.patterns.map(p=>({...p,steps:p.steps.map(s=>({prob:100,...s}))}));
-        if(d.songChain) S.songChain=d.songChain;
-        saveState(); render();
-      } catch(_) { alert('Invalid JSON file'); }
-    };
+    reader.onload = ev => { try { const d=JSON.parse(ev.target.result); if(d.patterns) S.patterns=d.patterns.map(p=>({...p,steps:p.steps.map(s=>({prob:100,...s}))})); if(d.songChain) S.songChain=d.songChain; saveState(); render(); } catch(_) { alert('Invalid JSON file'); } };
     reader.readAsText(file);
   };
   input.click();
