@@ -336,6 +336,7 @@ window._S = S;
 window._M = M;
 window._handleSysEx = sysexHandler;
 window._requestPatch = (bank, slot) => import('./micron-sysex.js').then(m => m.requestPatch(bank, slot));
+window.__debug = { get S() { return S; }, schedRender, get patch() { return S.patch; }, get rhythms() { return S.rhythms; }, get patterns() { return S.patterns; }, get setups() { return S.sysexSetups; }, get rhythmDumps() { return S.sysexRhythms; }, get patternDumps() { return S.sysexPatterns; } };
 setRenderFn(doRender);
 [sysexSetRender,patSetRender,midiSetRender,libSetRender,rhythmSetRender,configSetRender,standaloneSetRender,setupSetRender].forEach(fn=>fn(schedRender));
 document.addEventListener('keydown', e => {

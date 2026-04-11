@@ -2,7 +2,7 @@ import { html } from './micron-ui-core.js';
 import { S } from './micron-state.js';
 import { ARP_PATTERNS,ARP_ORDERS,ARP_MULTS,ARP_MODES,ARP_SPANS,TEMPO_SYNC_RATES,ENV_SLOPES,ENV_LOOPS,ENV_RESETS,PORTAMENTO_TYPES,PORTAMENTO_MODES,PITCH_BEND_MODES,UNISON_VOICES,PATCH_CATEGORIES,NOISE_TYPES,WAVE_NAMES,OCT_LABELS,SEMI_LABELS,envMs,lfoHz } from './micron-data.js';
 import { sp, pRow, pSel, sec, filterTab, fxTab, modTab, trackTab } from './micron-views-patch2.js';
-import { NRPN_MAP, defaultPatch, sendParam } from './micron-patch.js';
+import { NRPN_MAP, defaultPatch, sendParam, sendAllParams } from './micron-patch.js';
 
 const PATCH_TABS = ['Voice','OSC','Mix','Filter','Env','LFO','FX','Mod','Track','Output'];
 
@@ -161,34 +161,35 @@ const PARAM_TAB_MAP = {
   LFO:['lfo1Rate','lfo1Sync','lfo1SyncRate','lfo1Reset','lfo1M1','lfo2Rate','lfo2Sync','lfo2SyncRate','lfo2Reset','lfo2M1','shRate','shSync','shSyncRate','shReset','shSmooth'],
   FX:['fx1Type','fx1Mix','fx1PA','fx1PB','fx1PC','fx1PD','fx1PE','fx1PF','fx1PG','fx1PH','fx2Type','fx2Balance','fx2PA','fx2PB','fx2PC','fx2PD','fx2PE','fx2PF','driveType','driveLevel'],
   Mod:Array.from({length:12},(_,i)=>[`mod${i+1}Src`,`mod${i+1}Dst`,`mod${i+1}Lvl`,`mod${i+1}Off`]).flat(),
-  Track:['trkInput','trkPoints','trkPreset'],
-  Output:['outputLevel','patchName','knobX','knobY','knobZ'],
+  Track:['trkInput','trkPoints','trkPreset'], Output:['outputLevel','patchName','knobX','knobY','knobZ'],
 };
 
-function tabHasDiff(tabName) {
-  const def = defaultPatch();
-  return (PARAM_TAB_MAP[tabName]||[]).some(k=>S.patch[k]!==undefined && S.patch[k]!==def[k]);
-}
+function tabHasDiff(t) { const d=defaultPatch(); return (PARAM_TAB_MAP[t]||[]).some(k=>S.patch[k]!==undefined&&S.patch[k]!==d[k]); }
 
 function renderSearchResults(query) {
   const q = query.toLowerCase();
-  const results = [];
-  for (const [tabName, keys] of Object.entries(PARAM_TAB_MAP)) {
-    const matched = keys.filter(k => k.toLowerCase().includes(q));
-    if (!matched.length) continue;
-    results.push(html`<div>
-      <div class=search-tab-label>${tabName}</div>
-      ${matched.map(k => pRow(k, k, (NRPN_MAP[k]?.min??0), (NRPN_MAP[k]?.max??127)))}
-    </div>`);
-  }
-  return results.length
-    ? html`<div class=search-results>${results}</div>`
-    : html`<div class=no-results>No params matching "${query}"</div>`;
+  const results = Object.entries(PARAM_TAB_MAP).map(([t,keys])=>{
+    const m = keys.filter(k=>k.toLowerCase().includes(q));
+    return m.length ? html`<div><div class=search-tab-label>${t}</div>${m.map(k=>pRow(k,k,NRPN_MAP[k]?.min??0,NRPN_MAP[k]?.max??127))}</div>` : null;
+  }).filter(Boolean);
+  return results.length ? html`<div class=search-results>${results}</div>` : html`<div class=no-results>No params matching "${query}"</div>`;
 }
 
 export function renderPatchTab() {
   const q = S.paramSearch || '';
+  const bank = S.patchReqBank ?? 0;
+  const slot = S.patchReqSlot ?? 0;
   return html`<div>
+    <div class=section style="padding:6px 10px">
+      <div class=pr>
+        <label>Bank</label>
+        <input type=number min=0 max=3 value=${bank} oninput=${e=>{S.patchReqBank=Math.max(0,Math.min(3,+e.target.value));}} class=num-in style="width:42px" />
+        <label>Slot</label>
+        <input type=number min=0 max=127 value=${slot} oninput=${e=>{S.patchReqSlot=Math.max(0,Math.min(127,+e.target.value));}} class=num-in style="width:52px" />
+        <button class=tbtn onclick=${()=>{sendAllParams(S.patch);S.sysexLog='Sent all params via NRPN';window._micronRender?.();}}>▶ Send All</button>
+        <button class=tbtn onclick=${()=>{import('./micron-sysex.js').then(m=>m.requestPatch(S.patchReqBank??0,S.patchReqSlot??0));S.sysexLog=`Requesting patch bank ${S.patchReqBank??0} slot ${S.patchReqSlot??0}…`;window._micronRender?.();}}>⟳ Request</button>
+      </div>
+    </div>
     <div class=ptabs>${PATCH_TABS.map(t=>html`<button class=${'tbtn'+(S.patchTab===t?' active':'')} onclick=${()=>{S.patchTab=t;S.paramSearch='';window._micronRender?.();}}>
       ${t}${tabHasDiff(t)?html`<span class=tab-dot></span>`:null}
     </button>`)}</div>

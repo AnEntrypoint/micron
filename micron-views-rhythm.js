@@ -58,18 +58,15 @@ export function renderRhythmTab() {
       ${r.drums.map((drum,di)=>renderDrumRow(drum,di,r))}
       ${r.drums.length < 10 ? html`<button class=tbtn onclick=${()=>addDrum()}>+ Add Drum</button>` : null}
     </div>
-    ${renderFromSynth()}
     <div class=section>
-      <h4>SysEx</h4>
-      <div class=btn-group>
-        <button class=tbtn onclick=${()=>sendToMicron()}>Send to Micron</button>
-        <button class=tbtn onclick=${()=>requestFromMicron()}>Request from Micron</button>
-      </div>
       <div class=pr>
         <label>Slot</label>
-        <input type=number min=0 max=127 value=${S.rhythmSysexSlot||0} oninput=${e=>{S.rhythmSysexSlot=+e.target.value;}} class=num-in />
+        <input type=number min=0 max=127 value=${S.rhythmSysexSlot||0} oninput=${e=>{S.rhythmSysexSlot=+e.target.value;}} class=num-in style="width:56px" />
+        <button class=tbtn onclick=${()=>{sendRhythmSysEx(rhythm(),S.rhythmSysexSlot||0);S.sysexLog=`Sent rhythm → slot ${S.rhythmSysexSlot||0}`;render();}}>▶ Send</button>
+        <button class=tbtn onclick=${()=>{requestRhythm(S.rhythmSysexSlot||0);S.sysexLog=`Capturing rhythm slot ${S.rhythmSysexSlot||0}…`;render();}}>⟳ Capture</button>
       </div>
     </div>
+    ${renderFromSynth()}
   </div>`;
 }
 
@@ -173,23 +170,15 @@ function deleteRhythm() {
   saveState(); render();
 }
 
-function sendToMicron() {
-  sendRhythmSysEx(rhythm(), S.rhythmSysexSlot || 0);
-}
-
-function requestFromMicron() {
-  requestRhythm(S.rhythmSysexSlot || 0);
-}
-
 function renderFromSynth() {
-  const entries = (S.sysexSetups || []).map((s, i) => s ? {s, i} : null).filter(Boolean);
+  const entries = (S.sysexRhythms || []).map((s, i) => s ? {s, i} : null).filter(Boolean);
   return html`<div class=section>
     <h4>From Synth</h4>
     ${entries.length === 0
       ? html`<div class=hint>No rhythms received from synth yet. On Micron: [rhythms] → select → push knob → "Send MIDI sysex?"</div>`
       : html`<div class=standalone-list>
           ${entries.map(({s, i}) => html`<div class=standalone-slot>
-            <span class=slot-name>${s.name || `Setup ${i+1}`}</span>
+            <span class=slot-name>${s.name || `Rhythm ${i+1}`}</span>
             <span class=slot-info>slot ${i}</span>
             <button class=tbtn onclick=${() => loadSynthRhythm(i)}>Load</button>
           </div>`)}
@@ -198,7 +187,7 @@ function renderFromSynth() {
 }
 
 function loadSynthRhythm(i) {
-  const entry = S.sysexSetups?.[i];
+  const entry = S.sysexRhythms?.[i];
   if (!entry) return;
   import('./micron-sysex.js').then(({parseRhythmDump}) => {
     const parsed = parseRhythmDump(new Uint8Array(entry.raw));

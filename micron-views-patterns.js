@@ -2,7 +2,7 @@ import { html } from './micron-ui-core.js';
 import { S, pat, saveState } from './micron-state.js';
 import { noteColor, stepFracLabel } from './micron-data.js';
 import { renderQuickControls } from './micron-views-quickcontrols.js';
-import { sendPatternSysEx } from './micron-sysex.js';
+import { sendPatternSysEx, requestPattern } from './micron-sysex.js';
 
 let render = ()=>{};
 export function setRender(fn) { render=fn; }
@@ -30,7 +30,12 @@ export function renderPatternsTab() {
       <div class=pr>
         <label>Name</label>
         <input type=text value=${pat().name} oninput=${e=>{pat().name=e.target.value;saveState();render();}} class=name-in />
-        <button class=tbtn onclick=${()=>sendCurrentPattern()} title="Send to Micron">Send</button>
+      </div>
+      <div class=pr>
+        <label>Slot</label>
+        <input type=number min=0 max=255 value=${S.patSysexSlot??S.patIdx} oninput=${e=>{S.patSysexSlot=Math.max(0,Math.min(255,+e.target.value));}} class=num-in style="width:56px" />
+        <button class=tbtn onclick=${()=>{sendCurrentPattern();S.sysexLog=`Sent pattern → slot ${S.patSysexSlot??S.patIdx}`;render();}}>▶ Send</button>
+        <button class=tbtn onclick=${()=>{requestPattern(S.patSysexSlot??S.patIdx);S.sysexLog=`Capturing pattern slot ${S.patSysexSlot??S.patIdx}…`;render();}}>⟳ Capture</button>
       </div>
       <div class=pr>
         <label>Length</label>
@@ -90,7 +95,7 @@ function clearPat(i) {
 }
 
 function sendCurrentPattern() {
-  const slot = (S.standaloneSlots && S.standaloneSlots['p'+S.patIdx]) ?? S.patIdx;
+  const slot = (S.standaloneSlots && S.standaloneSlots['p'+S.patIdx]) ?? S.patSysexSlot ?? S.patIdx;
   sendPatternSysEx(pat(), slot);
 }
 
